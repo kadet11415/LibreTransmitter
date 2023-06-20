@@ -12,7 +12,13 @@ import HealthKit
 import LibreTransmitter
 import Combine
 
-extension LibreTransmitterManager: CGMManagerUI {
+struct LibreLifecycleProgress: DeviceLifecycleProgress {
+    var percentComplete: Double
+
+    var progressState: LoopKit.DeviceLifecycleProgressState
+}
+
+extension LibreTransmitterManagerV3: CGMManagerUI {
 
     public var cgmStatusBadge: DeviceStatusBadge? {
         nil
@@ -27,17 +33,36 @@ extension LibreTransmitterManager: CGMManagerUI {
 
         let doneNotifier = GenericObservableObject()
         let wantToTerminateNotifier = GenericObservableObject()
+        
+        let wantToResetCGMManagerNotifier = GenericObservableObject()
+        
+        let wantToRestablishConnectionNotifier = GenericObservableObject()
 
         let settings = SettingsView.asHostedViewController(
             displayGlucoseUnitObservable: displayGlucoseUnitObservable,
             notifyComplete: doneNotifier, notifyDelete: wantToTerminateNotifier,
+            notifyReset: wantToResetCGMManagerNotifier, notifyReconnect:wantToRestablishConnectionNotifier,
             transmitterInfoObservable: self.transmitterInfoObservable,
             sensorInfoObervable: self.sensorInfoObservable,
             glucoseInfoObservable: self.glucoseInfoObservable,
             alarmStatus: self.alarmStatus)
 
         let nav = CGMManagerSettingsNavigationViewController(rootViewController: settings)
+        nav.navigationItem.largeTitleDisplayMode = .always
+        nav.navigationBar.prefersLargeTitles = true
+        
+        wantToResetCGMManagerNotifier.listenOnce { [weak self] in
+            self?.logger.debug("CGM wants to reset cgmmanager")
+            self?.resetManager()
 
+        }
+        
+        wantToRestablishConnectionNotifier.listenOnce { [weak self, weak nav] in
+            self?.logger.debug("CGM wants to RestablishConnection")
+            self?.reEstablishProxy()
+            nav?.notifyComplete()
+        }
+        
         doneNotifier.listenOnce { [weak nav] in
             nav?.notifyComplete()
 
@@ -65,11 +90,30 @@ extension LibreTransmitterManager: CGMManagerUI {
     }
 
     public var cgmLifecycleProgress: DeviceLifecycleProgress? {
-        nil
+        if self.sensorInfoObservable.activatedAt == nil {
+            // This is the initial state before the plugin
+            // has connected to the sensor and retrieved its cgmLifecycleProgress
+            // We could show 0 here, but UX-wise it's probably wiser to not do so
+            return nil
+        }
+        
+        let minutesLeft = Double(self.sensorInfoObservable.sensorMinutesLeft)
+        
+        // This matches the manufacturere's app where it displays a notification when sensor has less than 3 days left
+        if TimeInterval(minutes: minutesLeft) < TimeInterval(hours: 24*3) {
+            let progress = self.sensorInfoObservable.calculateProgress()
+            if TimeInterval(minutes: minutesLeft) < TimeInterval(hours: 24) {
+                return LibreLifecycleProgress(percentComplete: progress, progressState: .warning)
+            }
+            return LibreLifecycleProgress(percentComplete: progress, progressState: .normalCGM)
+        }
+        
+        return nil
+        
     }
 }
 
-extension LibreTransmitterManager: DeviceManagerUI {
+extension LibreTransmitterManagerV3: DeviceManagerUI {
     public static var onboardingImage: UIImage? {
         nil
     }

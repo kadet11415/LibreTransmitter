@@ -16,7 +16,7 @@ git submodule add -b main git@github.com:dabear/LibreTransmitter.git LibreTransm
 ```
 
 * Add Glucose algorithm (GetGlucoseFromRaw.swift)
-  * First Download GetGlucoseFromRaw.swift from where ever you want (don't ask, out of scope for this guide) and place it into the Downloads folder on your mac
+  * First Download GetGlucoseFromRaw.swift from this external repo and put it in the Download folder on your mac: https://raw.githubusercontent.com/gui-dos/DiaBLE/main/Reversing/GlucoseFromRaw.swift
   * Add GetGlucoseFromRaw.swift into project. For example:
 ```
 cd ~/Downloads
@@ -24,12 +24,12 @@ mv GlucoseFromRaw.swift ~/Code/LoopWorkspace/LibreTransmitter/LibreSensor/Glucos
 ```
 
 ## In Xcode, Add LibreTransmitter project into LoopWorkspace
-* Open Loop.xcworkspace
+* Open LoopWorkspace.xcworkspace
 * Drag LibreTransmitter.xcodeproj from the Finder (from the LibreTransmitter submodule) into the xcode left menu while having the loop workspace open 
 * It should Look like this:
 ![CGMManager_swift](https://user-images.githubusercontent.com/442324/111884066-63241500-89bf-11eb-9b0c-14a440111cda.jpg "LibreTransmitter as part of workspace")
 
-* Select the "Loop (Workspace)" scheme and then "Edit scheme.."
+* Make sure the default "LoopWorkspace" scheme is selected and then "Edit scheme.."
 * In the Build Dialog, make sure to add LibreTransmitterPlugin as a build target, and place it just before "ShareClientPlugin"
 * In Xcode 13 this can be accessed from the top menu `Product -> Scheme -> Edit Scheme`
 * it should look like this: ![CGMManager_swift](https://user-images.githubusercontent.com/442324/111884191-41775d80-89c0-11eb-8f8a-51290e85d9a5.jpg)
@@ -45,8 +45,37 @@ To utilize libre2direct you need to pair your sensor via NFC first, and therefor
 * In Xcode, Open the Loop Project (not the LibreTransmitter project) in the navigator, go to "Signing & Capabilities",  then "+ Capability" and add the "NFC" or "Near field communication Tag Reading" capability.
 * In Loop's Info.plist, add the tag NFCReaderUsageDescription and set description to something similar to: "Loop will use NFC on the phone to pair libre2 sensors"
 
+## Give Libretransmitter Critical Alerts permissions
+Libretransmitter will by default send alarms as "timesensitve", appearing immediately on the lock screen.
+If you mute or set your phone to do not disturb, you can potentially miss out on such alarms.
+To remedy this, LibreTransmitter can be configured to try to upgrade any glucose alarms to "critical". 
+Critical alarms will sound even if your phone is set to to mute or "do not disturb" mode.
 
+For this to be possible, you will have to request special permissions from apple.
+This process is documented at https://stackoverflow.com/questions/66057840/ios-how-do-you-implement-critical-alerts-for-your-app-when-you-dont-have-an-en . 
+The linked article describes some necessary code changes, but the code changes mentioned there should be ignored. 
 
+It's worth mentioning again that those permissions must be given to Loop itself, not to the LibreTransmitter package. The
+com.apple.developer.usernotifications.critical-alerts permission must be added to Loop/Loop.entitlement file in the Loop folder (not inside LibreTransmitter
+
+### Method 1
+Using this method, only the LibreTransmitter cgm alarms can become critical
+
+You should only change the shouldOverrideRequestCriticalPermissions toggle in the NotificationHelperOverride.swift file to true, like this:
+
+```swift
+enum NotificationHelperOverride {
+    static var shouldOverrideRequestCriticalPermissions : Bool {
+        // if you want LibreTransmitter to try upgrading to critical notifications, change this
+        true
+    }
+}
+
+```
+### Method 2
+Using this method, both Loop pump, cgm alarms and LibreTransmitter alarms will become critical
+
+Go to the Loop Project (not target)→Build settings → Swift Compiler → Custom flags → Other swift flags section and edit the different configuration flags. Add the flag “CRITICAL_ALERTS_ENABLED” (without the quotes).
 
 ## Build the LoopWorkspace with LibreTransmitter Plugin
 * In xcode, go to Product->"Clean Build Folder"

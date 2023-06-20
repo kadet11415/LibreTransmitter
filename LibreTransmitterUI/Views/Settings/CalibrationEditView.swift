@@ -2,14 +2,32 @@
 //  CalibrationEditView.swift
 //  LibreTransmitterUI
 //
-//  Created by Bjørn Inge Berg on 24/03/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 24/03/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import SwiftUI
 import Combine
 import LibreTransmitter
 import LoopKit
+
+struct NotificationView: View {
+    var text: String
+    var body: some View {
+        HStack(alignment: .center) {
+            Text(Image(systemName: "exclamationmark.triangle").resizable())
+
+            +
+            Text(text)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                
+        }
+        .foregroundColor(.black)
+        .padding()
+        .background(Color.yellow.opacity(0.65))
+        .cornerRadius(12)
+    }
+}
 
 struct CalibrationEditView: View {
     typealias Params = SensorData.CalibrationInfo
@@ -40,13 +58,13 @@ struct CalibrationEditView: View {
                     return
                 }
 
-                if false && isReadOnly {
+                if isReadOnly {
                     presentableStatus = StatusMessage(title: "Could not save", message: "Calibration parameters are readonly and cannot be saved")
                     return
                 }
 
                 do {
-                    try KeychainManagerWrapper.standard.setLibreNativeCalibrationData(newParams)
+                    try KeychainManager.standard.setLibreNativeCalibrationData(newParams)
                     print("calibrationsaving completed")
 
                     presentableStatus = StatusMessage(title: "OK", message: "Calibrations saved!")
@@ -56,7 +74,7 @@ struct CalibrationEditView: View {
                 }
 
             }, label: {
-                Text("Save")
+                Text(LocalizedString("Save", comment: "Text describing Save button in calibrationeditview"))
 
             }).buttonStyle(BlueButtonStyle())
             .alert(item: $presentableStatus) { status in
@@ -66,32 +84,50 @@ struct CalibrationEditView: View {
         }
     }
 
-    var calibrationInputsSection : some View {
-        Section {
-            NumericTextField(description: "i1", showDescription: true, numericValue: $newParams.i1, isReadOnly: isReadOnly)
-            NumericTextField(description: "i2", showDescription: true, numericValue: $newParams.i2, isReadOnly: isReadOnly)
-            NumericTextField(description: "i3", showDescription: true, numericValue: $newParams.i3, isReadOnly: isReadOnly)
-            NumericTextField(description: "i4", showDescription: true, numericValue: $newParams.i4, isReadOnly: isReadOnly)
-            NumericTextField(description: "i5", showDescription: true, numericValue: $newParams.i5, isReadOnly: isReadOnly)
-            NumericTextField(description: "i6", showDescription: true, numericValue: $newParams.i6, isReadOnly: isReadOnly)
-        }
+    var calibrationInputsSections : some View {
+        Group {
+            Section {
+                NumericTextField(description: "i1", showDescription: true, numericValue: $newParams.i1, isReadOnly: isReadOnly)
+                NumericTextField(description: "i2", showDescription: true, numericValue: $newParams.i2, isReadOnly: isReadOnly)
+                NumericTextField(description: "i3", showDescription: true, numericValue: $newParams.i3, isReadOnly: isReadOnly)
+                NumericTextField(description: "i4", showDescription: true, numericValue: $newParams.i4, isReadOnly: isReadOnly)
+                NumericTextField(description: "i5", showDescription: true, numericValue: $newParams.i5, isReadOnly: isReadOnly)
+                NumericTextField(description: "i6", showDescription: true, numericValue: $newParams.i6, isReadOnly: isReadOnly)
+                
+            }
+            
+            Section{
+                NumericTextField(description: "extraSlope", showDescription: true, numericValue: $newParams.extraSlope, isReadOnly: isReadOnly)
+                NumericTextField(description: "extraOffset", showDescription: true, numericValue: $newParams.extraOffset, isReadOnly: isReadOnly)
+            }
+            
+        }.disabled(!Features.allowsEditingFactoryCalibrationData)
+        
     }
 
     var validForSection : some View {
         Section {
-            Text("Valid for footer: \(newParams.isValidForFooterWithReverseCRCs)")
+            Text(LocalizedString("Valid for footer: " , comment: "Text describing technical details about the validity of calibrations ") +  "\(newParams.isValidForFooterWithReverseCRCs)")
 
         }
     }
+    
+    
 
     var body: some View {
+        if !Features.allowsEditingFactoryCalibrationData {
+            NotificationView(text: "To modify these settings you need to modify the code to allow it")
+        }
         List {
-            calibrationInputsSection
+            calibrationInputsSections
             validForSection
-            saveButtonSection
+            if Features.allowsEditingFactoryCalibrationData {
+                saveButtonSection
+            }
+            
         }
         .listStyle(InsetGroupedListStyle())
-        .navigationBarTitle("Calibration Edit")
+        .navigationBarTitle(Features.allowsEditingFactoryCalibrationData ? "Calibration Edit" : "Calibration Details")
     }
 
     @ObservedObject private var newParams: Params
@@ -102,7 +138,8 @@ struct CalibrationEditView: View {
     public init(debugMode: Bool=false) {
         self.debugMode = debugMode
 
-        if let params = KeychainManagerWrapper.standard.getLibreNativeCalibrationData() {
+        
+        if let params = KeychainManager.standard.getLibreNativeCalibrationData() {
             hasExistingParams = true
             self.newParams = params
         } else {

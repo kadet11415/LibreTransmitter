@@ -2,8 +2,8 @@
 //  GlucoseSettingsView.swift
 //  LibreTransmitterUI
 //
-//  Created by Bjørn Inge Berg on 26/05/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 26/05/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import SwiftUI
@@ -27,23 +27,27 @@ struct GlucoseSettingsView: View {
 
     }
 
-    @AppStorage("no.bjorninge.mmSyncToNs") var mmSyncToNS: Bool = true
-    @AppStorage("no.bjorninge.mmBackfillFromHistory") var mmBackfillFromHistory: Bool = true
-    @AppStorage("no.bjorninge.mmBackfillFromTrend") var mmBackfillFromTrend: Bool = false
-    @AppStorage("no.bjorninge.shouldPersistSensorData") var shouldPersistSensorData: Bool = false
+    @AppStorage("com.loopkit.libreSyncToNs") var mmSyncToNS: Bool = true
+    @AppStorage("com.loopkit.libreBackfillFromHistory") var mmBackfillFromHistory: Bool = true
+    @AppStorage("com.loopkit.libreshouldPersistSensorData") var shouldPersistSensorData: Bool = false
 
+    @State private var authSuccess = false
+    
+    // Set this to true to require system authentication
+    // for accessing the glucose section
+    @State private var requiresAuthentication = Features.glucoseSettingsRequireAuthentication
+    
     var body: some View {
         List {
 
-            Section(header: Text("Backfill options"), footer: Text("Backfilling from trend is currently not well supported by Loop") ) {
+            Section(header: Text(LocalizedString("Backfill options", comment: "Text describing header for backfill options in glucosesettingsview"))) {
                 Toggle("Backfill from history", isOn: $mmBackfillFromHistory)
-                Toggle("Backfill from trend", isOn: $mmBackfillFromTrend)
             }
-            Section(header: Text("Remote data storage")) {
+            Section(header: Text(LocalizedString("Remote data storage", comment: "Text describing header for remote data storage"))) {
                 Toggle("Upload to nightscout", isOn: $mmSyncToNS)
 
             }
-            Section(header: Text("Debug options"), footer: Text("Adds a lot of data to the Issue Report ")) {
+            Section(header: Text(LocalizedString("Debug options", comment: "Text describing header for debug options in glucosesettingsview")), footer: Text(LocalizedString("Adds a lot of data to the Issue Report ", comment: "Text informing user of potentially large reports"))) {
                 Toggle("Persist sensordata", isOn: $shouldPersistSensorData)
                     .onChange(of: shouldPersistSensorData) {newValue in
                         if !newValue {
@@ -51,14 +55,23 @@ struct GlucoseSettingsView: View {
                         }
                     }
             }
-
+            
         }
+        .onAppear {
+            if requiresAuthentication && !authSuccess {
+                self.authenticate { success in
+                    print("got authentication response: \(success)")
+                    authSuccess = success
+                }
+            }
+        }
+        .disabled(requiresAuthentication ? !authSuccess : false)
         .listStyle(InsetGroupedListStyle())
         .alert(item: $presentableStatus) { status in
             Alert(title: Text(status.title), message: Text(status.message), dismissButton: .default(Text("Got it!")))
         }
         .navigationBarTitle("Glucose Settings")
-
+        
     }
 
 }

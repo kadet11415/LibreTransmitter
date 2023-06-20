@@ -21,7 +21,16 @@ public struct SensorData: Codable {
     /// The uid of the sensor
     let uuid: Data
     /// The serial number of the sensor
-    let serialNumber: String
+    var serialNumber: String {
+        guard let patchInfo,
+              patchInfo.count >= 6,
+              let family = SensorFamily(rawValue: Int(patchInfo[2] >> 4))
+        else {
+            return "-"
+        }
+        
+        return SensorSerialNumber(withUID: uuid, sensorFamily:family )?.serialNumber ?? "-"
+    }
     /// Number of bytes of sensor data to be used (read only), i.e. 344 bytes (24 for header, 296 for body and 24 for footer)
     private let numberOfBytes = 344 // Header and body and footer of Freestyle Libre data (i.e. 40 blocks of 8 bytes)
     /// Array of 344 bytes as read via nfc
@@ -41,7 +50,7 @@ public struct SensorData: Codable {
     /// Date when data was read from sensor
     let date: Date
     /// Minutes (approx) since start of sensor
-    var minutesSinceStart: Int {
+    public var minutesSinceStart: Int {
         Int(body[293]) << 8 + Int(body[292])
     }
     /// Maximum time in Minutes he sensor can be worn before it expires
@@ -78,7 +87,7 @@ public struct SensorData: Codable {
     }
 
     // the amount of minutes left before this sensor expires
-    var minutesLeft: Int {
+    public var minutesLeft: Int {
        maxMinutesWearTime - minutesSinceStart
     }
 
@@ -111,15 +120,12 @@ public struct SensorData: Codable {
         return (b0 << 8) | UInt16(b1)
     }
 
-    mutating func decrypt(patchInfo: String, uid: [UInt8]) {
-        guard let info = patchInfo.hexadecimal(), let sensorType = SensorType(patchInfo: patchInfo)  else {
-            return
-        }
-
-        // var decrypted2 = Libre2.decryptFRAM(sensorId: uid, sensorInfo: [UInt8](info), FRAMData: self.bytes)
+    mutating func decrypt(patchInfo: Data, uid: [UInt8]) {
+        
+        let sensorType = SensorType(patchInfo: patchInfo)
 
         do {
-            self.bytes = try Libre2.decryptFRAM(type: sensorType, id: uid, info: [UInt8](info), data: self.bytes)
+            self.bytes = try Libre2.decryptFRAM(type: sensorType, id: uid, info: patchInfo, data: self.bytes)
         } catch {
             return
         }
@@ -132,6 +138,8 @@ public struct SensorData: Codable {
         case i4
         case i5
         case i6
+        case extraSlope
+        case extraOffset
         case isValidForFooterWithReverseCRCs
 
     }
@@ -145,6 +153,19 @@ public struct SensorData: Codable {
             i4 = try container.decode(Double.self, forKey: .i4)
             i5 = try container.decode(Double.self, forKey: .i5)
             i6 = try container.decode(Double.self, forKey: .i6)
+            
+            
+            // These are for all intents and purposes optional
+            do {
+                extraSlope = try container.decode(Double.self, forKey: .extraSlope)
+                extraOffset = try container.decode(Double.self, forKey: .extraOffset)
+                
+            } catch {
+                extraOffset = 0
+                extraSlope = 1
+                
+            }
+            
             isValidForFooterWithReverseCRCs = try container.decode(Int.self, forKey: .isValidForFooterWithReverseCRCs)
         }
 
@@ -157,6 +178,10 @@ public struct SensorData: Codable {
             try container.encode(i5, forKey: .i5)
             try container.encode(i6, forKey: .i6)
             try container.encode(isValidForFooterWithReverseCRCs, forKey: .isValidForFooterWithReverseCRCs)
+            
+            
+            try container.encode(extraSlope, forKey: .extraSlope)
+            try container.encode(extraOffset, forKey: .extraOffset)
         }
         public init(i1: Int, i2: Int, i3: Double, i4: Double, i5: Double, i6: Double, isValidForFooterWithReverseCRCs: Int) {
             self.i1 = i1
@@ -165,6 +190,8 @@ public struct SensorData: Codable {
             self.i4 = i4
             self.i5 = i5
             self.i6 = i6
+            self.extraSlope = 1
+            self.extraOffset = 0
             self.isValidForFooterWithReverseCRCs = isValidForFooterWithReverseCRCs
         }
 
@@ -174,11 +201,14 @@ public struct SensorData: Codable {
         @Published public var i4: Double
         @Published public var i5: Double
         @Published public var i6: Double
+        @Published public var extraOffset: Double
+        @Published public var extraSlope: Double
 
         @Published public var isValidForFooterWithReverseCRCs: Int
 
       public var description: String {
-            "CalibrationInfo(i1: \(i1), i2: \(i2), i3: \(i3), i4: \(i4), isValidForFooterWithReverseCRCs: \(isValidForFooterWithReverseCRCs), i5: \(i5)), i6: \(i6))"
+            "CalibrationInfo(i1: \(i1), i2: \(i2), i3: \(i3), i4: \(i4)," +
+            "isValidForFooterWithReverseCRCs: \(isValidForFooterWithReverseCRCs), i5: \(i5), i6: \(i6), extraOffset: \(extraOffset), extraSlope: \(extraSlope))"
       }
     }
 
@@ -197,6 +227,9 @@ public struct SensorData: Codable {
         return CalibrationInfo(i1: i1, i2: i2, i3: negativei3 ? -i3 : i3, i4: i4, i5: i5, i6: i6, isValidForFooterWithReverseCRCs: Int(self.footerCrc.byteSwapped))
     }
 
+    // strictly only needed for decryption and calculating serial numbers properly
+    public var patchInfo : Data?
+    
     fileprivate let aday = 86_400.0 // in seconds
 
     var humanReadableSensorAge: String {
@@ -229,8 +262,8 @@ public struct SensorData: Codable {
         self.date = date.rounded(on: 1, .minute)
 
         self.uuid = uuid
-
-        self.serialNumber = SensorSerialNumber(withUID: uuid)?.serialNumber ?? "-"
+        
+        print("sensor uuid: \(uuid)")
 
         // we disable this check as we might be dealing with an encrypted libre2 sensor
         /*
@@ -385,7 +418,7 @@ extension SensorData {
     }
 
     static func writeBits(_ buffer: [UInt8], _ byteOffset: Int, _ bitOffset: Int, _ bitCount: Int, _ value: Int) -> [UInt8] {
-        var res = buffer; // Make a copy
+        var res = buffer
         for i in stride(from: 0, to: bitCount, by: 1) {
             let totalBitOffset = byteOffset * 8 + bitOffset + i
             let byte = Int(floor(Double(totalBitOffset) / 8))
@@ -405,7 +438,7 @@ public extension Array where Element ==  Measurement {
     private func multiply(_ a: [Double], _ b: [Double]) -> [Double] {
         return zip(a, b).map(*)
     }
-    //https://github.com/raywenderlich/swift-algorithm-club/blob/master/Linear%20Regression/LinearRegression.playground/Contents.swift
+    // https://github.com/raywenderlich/swift-algorithm-club/blob/master/Linear%20Regression/LinearRegression.playground/Contents.swift
     private func linearRegression(_ xs: [Double], _ ys: [Double]) -> (Double) -> Double {
         let sum1 = average(multiply(xs, ys)) - average(xs) * average(ys)
         let sum2 = average(multiply(xs, xs)) - pow(average(xs), 2)
@@ -420,10 +453,9 @@ public extension Array where Element ==  Measurement {
             return first
         }
 
-        guard let first = first else {
+        guard let first else {
             return nil
         }
-
         let sorted = sorted { $0.date < $1.date}
 
         // keep the recent raw temperatures, we don't want to apply linear regression to them

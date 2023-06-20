@@ -20,7 +20,6 @@ public struct LibreGlucose: Codable, Hashable {
 
     public var timestamp: Date
 
-
     public static func timeDifference(oldGlucose: LibreGlucose, newGlucose: LibreGlucose) -> TimeInterval {
         newGlucose.startDate.timeIntervalSince(oldGlucose.startDate)
     }
@@ -54,7 +53,7 @@ extension LibreGlucose: GlucoseValue {
 extension LibreGlucose {
     public var description: String {
         guard let glucoseUnit = UserDefaults.standard.mmGlucoseUnit, let formatter = LibreGlucose.dynamicFormatter, let formatted = formatter.string(from: self.quantity, for: glucoseUnit) else {
-            logger.debug("dabear:: glucose unit was not recognized, aborting")
+            logger.debug("glucose unit was not recognized, aborting")
             return "Unknown"
         }
 
@@ -74,7 +73,7 @@ extension LibreGlucose {
 
     public static var dynamicFormatter: QuantityFormatter? {
         guard let glucoseUnit = UserDefaults.standard.mmGlucoseUnit else {
-            logger.debug("dabear:: glucose unit was not recognized, aborting")
+            logger.debug("glucose unit was not recognized, aborting")
             return nil
         }
 
@@ -83,7 +82,7 @@ extension LibreGlucose {
 
     public static func glucoseDiffDesc(oldValue: Self, newValue: Self) -> String {
         guard let glucoseUnit = UserDefaults.standard.mmGlucoseUnit else {
-            logger.debug("dabear:: glucose unit was not recognized, aborting")
+            logger.debug("glucose unit was not recognized, aborting")
             return "Unknown"
         }
 
@@ -127,7 +126,7 @@ extension LibreGlucose {
 
     static func GetGlucoseTrend(current: Self?, last: Self?) -> GlucoseTrend {
 
-        guard let current = current, let last = last else {
+        guard let current, let last else {
             return  .flat
         }
 
@@ -161,11 +160,12 @@ extension LibreGlucose {
         var arr = [LibreGlucose]()
 
         for historical in measurements {
+            let calibrated = historical.calibratedGlucose(calibrationInfo: nativeCalibrationData)
             let glucose = LibreGlucose(
                 // unsmoothedGlucose: historical.temperatureAlgorithmGlucose,
                 // glucoseDouble: historical.temperatureAlgorithmGlucose,
-                unsmoothedGlucose: historical.roundedGlucoseValueFromRaw2(calibrationInfo: nativeCalibrationData),
-                glucoseDouble: historical.roundedGlucoseValueFromRaw2(calibrationInfo: nativeCalibrationData),
+                unsmoothedGlucose: calibrated,
+                glucoseDouble: calibrated,
                 error: historical.error,
                 timestamp: historical.date)
 
@@ -177,7 +177,7 @@ extension LibreGlucose {
         return arr
     }
 
-    static func fromTrendMeasurements(_ measurements: [Measurement], nativeCalibrationData: SensorData.CalibrationInfo, returnAll: Bool) -> [LibreGlucose] {
+    static func fromTrendMeasurements(_ measurements: [Measurement], nativeCalibrationData: SensorData.CalibrationInfo) -> [LibreGlucose] {
         var arr = [LibreGlucose]()
 
         var shouldSmoothGlucose = true
@@ -187,7 +187,7 @@ extension LibreGlucose {
             // the sensordisplayable property
             let glucose = LibreGlucose(
                 // unsmoothedGlucose: trend.temperatureAlgorithmGlucose,
-                unsmoothedGlucose: trend.roundedGlucoseValueFromRaw2(calibrationInfo: nativeCalibrationData),
+                unsmoothedGlucose: trend.calibratedGlucose(calibrationInfo: nativeCalibrationData),
                 glucoseDouble: 0.0,
                 error: trend.error,
                 timestamp: trend.date)
@@ -210,10 +210,6 @@ extension LibreGlucose {
             for i in 0 ..< arr.count {
                 arr[i].glucoseDouble = arr[i].unsmoothedGlucose
             }
-        }
-
-        if !returnAll, let first = arr.first {
-            return [first]
         }
 
         return arr

@@ -2,8 +2,8 @@
 //  DoubleExtensions.swift
 //  MiaomiaoClientUI
 //
-//  Created by Bjørn Inge Berg on 25/03/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 25/03/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
@@ -17,12 +17,5 @@ extension Double {
     var twoDecimals: String {
         String(format: "%.2f", self)
     }
-    var fourDecimals: String {
-        String(format: "%.4f", self)
-    }
-
-    enum Number {
-        static var formatter = NumberFormatter()
-    }
-
+    
 }

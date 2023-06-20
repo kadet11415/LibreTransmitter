@@ -2,15 +2,14 @@
 //  LibreTransmitterManager+Libre2EU.swift
 //  LibreTransmitter
 //
-//  Created by Bjørn Inge Berg on 25/04/2022.
+//  Created by LoopKit Authors on 25/04/2022.
 //  Copyright © 2022 Mark Wilson. All rights reserved.
 //
 
 import Foundation
 import LoopKit
 
-extension LibreTransmitterManager {
-
+extension LibreTransmitterManagerV3 {
 
     public func libreSensorDidUpdate(with error: LibreError) {
 
@@ -21,7 +20,7 @@ extension LibreTransmitterManager {
     }
 
     public func libreSensorDidUpdate(with bleData: Libre2.LibreBLEResponse, and Device: LibreTransmitterMetadata) {
-        self.logger.debug("dabear:: got sensordata: \(String(describing: bleData))")
+        self.logger.debug("got sensordata: \(String(describing: bleData))")
         let typeDesc = Device.sensorType().debugDescription
 
         let now = Date()
@@ -35,7 +34,7 @@ extension LibreTransmitterManager {
         logger.debug("Directly connected to libresensor of type \(typeDesc). Details:  \(Device.description)")
 
         guard let mapping = UserDefaults.standard.calibrationMapping,
-              let calibrationData = calibrationData,
+              let calibrationData,
               let sensor = UserDefaults.standard.preSelectedSensor else {
             logger.error("calibrationdata, sensor uid or mapping missing, could not continue")
             self.delegateQueue.async {
@@ -61,22 +60,27 @@ extension LibreTransmitterManager {
 
         let sortedTrends = bleData.trend.sorted { $0.date > $1.date}
 
-        let glucose = LibreGlucose.fromTrendMeasurements(sortedTrends, nativeCalibrationData: calibrationData, returnAll: UserDefaults.standard.mmBackfillFromTrend)
+        let glucose = LibreGlucose.fromTrendMeasurements(sortedTrends, nativeCalibrationData: calibrationData)
 
-        let newGlucose = glucosesToSamplesFilter(glucose, startDate: getStartDateForFilter())
+        var newGlucose : [NewGlucoseSample] = glucosesToSamplesFilter(glucose, startDate: getStartDateForFilter())
+        // For libre2 bluetooth we do need all trend elements to calculate trendarrow,
+        // but we can't report all those trends back to loop
+        if let newest = newGlucose.first {
+            newGlucose = [newest]
+        }
 
         if newGlucose.isEmpty {
             self.countTimesWithoutData &+= 1
         } else {
             self.latestBackfill = glucose.max { $0.startDate < $1.startDate }
             self.latestPrediction =  self.createBloodSugarPrediction(bleData.trend, calibration: calibrationData)
-            self.logger.debug("dabear:: latestbackfill set to \(self.latestBackfill.debugDescription)")
+            self.logger.debug("latestbackfill set to \(self.latestBackfill.debugDescription)")
             self.countTimesWithoutData = 0
         }
 
         self.setObservables(sensorData: nil, bleData: bleData, metaData: Device)
 
-        self.logger.debug("dabear:: handleGoodReading returned with \(newGlucose.count) entries")
+        self.logger.debug("handleGoodReading returned with \(newGlucose.count) entries")
         self.delegateQueue.async {
             var result: CGMReadingResult
             // If several readings from a valid and running sensor come out empty,

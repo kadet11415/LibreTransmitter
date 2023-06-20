@@ -2,8 +2,8 @@
 //  DateExtensions.swift
 //  MiaomiaoClient
 //
-//  Created by Bjørn Inge Berg on 07/03/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 07/03/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
@@ -48,6 +48,22 @@ public extension Date {
         let dateformat = DateFormatter()
         dateformat.dateFormat = format
         return dateformat.string(from: self)
+    }
+    
+    // Calculates the progress made from the start of the given range to the current date
+    // Returns a percentage value between 0 and 100
+    func getProgress(range: ClosedRange<Date>) -> Double {
+        if self >= range.upperBound {
+           return 100
+        } else if self <= range.lowerBound {
+           return 0
+        }
+        
+        let totalTime = range.upperBound.timeIntervalSince(range.lowerBound)
+        let elapsed = self.timeIntervalSince(range.lowerBound)
+        // Calculate the progress made so far as a percentage of the total time
+        return  (elapsed / totalTime) * 100
+           
     }
 }
 

@@ -2,8 +2,8 @@
 //  BluetoothSelection.swift
 //  MiaomiaoClientUI
 //
-//  Created by Bjørn Inge Berg on 17/10/2020.
-//  Copyright © 2020 Bjørn Inge Vikhammermo Berg. All rights reserved.
+//  Created by LoopKit Authors on 17/10/2020.
+//  Copyright © 2020 LoopKit Authors. All rights reserved.
 //
 
 import Combine
@@ -17,7 +17,7 @@ private struct Defaults {
     static let background = Color(UIColor.systemGroupedBackground)
 }
 
-//https://www.objc.io/blog/2020/02/18/a-signal-strength-indicator/
+// https://www.objc.io/blog/2020/02/18/a-signal-strength-indicator/
 struct SignalStrengthIndicator: View {
     @Binding var bars: Int
     var totalBars: Int = 5
@@ -49,7 +49,7 @@ struct Divided<S: Shape>: Shape {
 private struct ListFooter: View {
     var devicesCount = 0
     var body: some View {
-        Text("Found devices: \(devicesCount)")
+        Text(LocalizedString("Found devices:", comment: "Text for discovered number of devices") + " \(devicesCount)")
     }
 }
 
@@ -129,17 +129,17 @@ private struct DeviceItem: View {
             VStack(alignment: .leading) {
                 Text("\(details1)")
                     .font(.system(size: 20, weight: .medium, design: .default))
-                if let details2 = details2 {
+                if let details2 {
                     Text("\(details2)")
                 }
-                if let details3 = details3 {
+                if let details3 {
                     Text("\(details3)")
                 }
 
             }
             Spacer()
             VStack(alignment: .center, spacing: /*@START_MENU_TOKEN@*/nil/*@END_MENU_TOKEN@*/, content: {
-                if let rssi = rssi {
+                if let rssi {
                     SignalStrengthIndicator(bars: .constant(rssi.signalBars), totalBars: rssi.totalBars)
                         .frame(width: 40, height: 40, alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/)
                 }
@@ -151,25 +151,28 @@ private struct DeviceItem: View {
         }
         .listRowBackground(getRowBackground(device: device))
         .onTapGesture {
-            print("dabear:: tapped \(device.asStringIdentifier)")
+            print(" tapped \(device.asStringIdentifier)")
 
             if requiresPhoneNFC && !Features.phoneNFCAvailable {
                 // cannot select, show gui somehow
                 presentableStatus = StatusMessage(title: "Not availble", message: "The device selected is not available due to lack of NFC support on your phone")
                 isShowingSetup = false
-                print("dabear:: tapped  \(device.asStringIdentifier) but it requires nfc, not available")
+                print(" tapped  \(device.asStringIdentifier) but it requires nfc, not available")
                 return
             }
 
             if requiresSetup {
-                print("dabear:: tapped  \(device.asStringIdentifier) but it requires setup, so aborting")
+                print(" tapped  \(device.asStringIdentifier) but it requires setup, so aborting")
                 isShowingSetup = true
 
                 return
             }
 
-            print("dabear:: tapped and set \(device.asStringIdentifier) as new identifier")
+            print(" tapped and set \(device.asStringIdentifier) as new identifier")
             selection.selectedStringIdentifier = device.asStringIdentifier
+            // only relevant for launch through settings, as selectionstate can be persisted
+            // we need to enforce transmitter mode by removing any selected third party transmitter
+            selection.selectedUID = nil
         }
     }
 }
@@ -260,22 +263,20 @@ struct BluetoothSelection: View {
         }
     }
 
-    var headerSection: some View {
-        Section {
-            Text("Select the third party transmitter you want to connect to")
+    var header: some View {
+        Group {
+            Text(LocalizedString("Select the third party transmitter you want to connect to", comment: "Text describing user choice of selecting which transmitter to connect to"))
                 .listRowBackground(Defaults.background)
                 .padding(.top)
             HStack {
                 Image(systemName: "link.circle")
-                Text("Libre Transmitters")
+                Text(LocalizedString("Libre Transmitters", comment: "Text header for Libre Transmitters choice"))
             }
         }
     }
     var list : some View {
         List {
-            headerSection
-
-            Section {
+            Section(header: header) {
                 ForEach(allDevices) { device in
                     if debugMode {
                         let randomRSSI = RSSIInfo(bledeviceID: device.asStringIdentifier, signalStrength: -90 + (1...70).randomElement()!)
@@ -305,13 +306,13 @@ struct BluetoothSelection: View {
             if debugMode {
                 allDevices = Self.getMockData()
             } else {
-                print("dabear:: asking searcher to search!")
+                print(" asking searcher to search!")
                 self.searcher?.scanForCompatibleDevices()
             }
         }
         .onDisappear {
             if !self.debugMode {
-                print("dabear:: asking searcher to stop searching!")
+                print(" asking searcher to stop searching!")
                 self.searcher?.stopTimer()
                 self.searcher?.disconnectManually()
 

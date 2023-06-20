@@ -19,7 +19,7 @@ class LibreTransmitterSetupViewController: UINavigationController, CGMManagerOnb
 
     fileprivate lazy var logger = Logger(forType: Self.self)
 
-    lazy var cgmManager: LibreTransmitterManager? =  LibreTransmitterManager()
+    lazy var cgmManager: LibreTransmitterManagerV3? =  LibreTransmitterManagerV3()
 
     var modeSelection: UIHostingController<ModeSelectionView>!
 
@@ -48,7 +48,7 @@ class LibreTransmitterSetupViewController: UINavigationController, CGMManagerOnb
     }
 
     deinit {
-        logger.debug("dabear LibreTransmitterSetupViewController() deinit was called")
+        logger.debug("LibreTransmitterSetupViewController() deinit was called")
         // cgmManager = nil
     }
 
@@ -68,7 +68,7 @@ class LibreTransmitterSetupViewController: UINavigationController, CGMManagerOnb
 
         let hasNewDevice = SelectionState.shared.selectedStringIdentifier != UserDefaults.standard.preSelectedDevice
         if hasNewDevice, let newDevice = SelectionState.shared.selectedStringIdentifier {
-            logger.debug("dabear: Setupcontroller will set new device to \(newDevice)")
+            logger.debug("Setupcontroller will set new device to \(newDevice)")
             UserDefaults.standard.preSelectedDevice = newDevice
             SelectionState.shared.selectedUID = nil
             UserDefaults.standard.preSelectedUid = nil
@@ -76,7 +76,7 @@ class LibreTransmitterSetupViewController: UINavigationController, CGMManagerOnb
         } else if let newUID = SelectionState.shared.selectedUID {
             // this one is only temporary,
             // as we don't know the bluetooth identifier during nfc setup
-            logger.debug("dabear: Setupcontroller will set new libre2 device  to \(newUID)")
+            logger.debug("Setupcontroller will set new libre2 device  to \(newUID)")
 
             UserDefaults.standard.preSelectedUid = newUID
             SelectionState.shared.selectedUID = nil
@@ -88,13 +88,13 @@ class LibreTransmitterSetupViewController: UINavigationController, CGMManagerOnb
             // stored both preSelectedDevice and selectedUID !
         }
 
-        if let cgmManager = cgmManager {
-            logger.debug("dabear: Setupcontroller Saving from setup")
+        if let cgmManager {
+            logger.debug("Setupcontroller Saving from setup")
             cgmManagerOnboardingDelegate?.cgmManagerOnboarding(didCreateCGMManager: cgmManager)
             cgmManagerOnboardingDelegate?.cgmManagerOnboarding(didOnboardCGMManager: cgmManager)
 
         } else {
-            logger.debug("dabear: Setupcontroller not Saving from setup")
+            logger.debug("Setupcontroller not Saving from setup")
         }
 
         completionDelegate?.completionNotifyingDidComplete(self)

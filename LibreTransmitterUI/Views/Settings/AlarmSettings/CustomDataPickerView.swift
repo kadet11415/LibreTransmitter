@@ -2,8 +2,8 @@
 //  CustomDataPickerView.swift
 //  LibreTransmitterUI
 //
-//  Created by Bjørn Inge Berg on 28/04/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 28/04/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import SwiftUI
@@ -103,54 +103,62 @@ struct CustomDataPickerView: View {
     }
 
     var pickers: some View {
-        HStack {
-            Picker("", selection: $externalState.start.animation(), content: {
-                ForEach(startTimes.indices) { i in
-                    Text("\(startTimes[i])").tag(i)
-               }
-            })
-            // .border(Color.green)
+      HStack {
+        Picker("", selection: $externalState.start,
+          content: {
+            ForEach(startTimes.indices) { i in
+              Text("\(startTimes[i])").tag(i)
+            }
+          }
+        )
+        // .border(Color.green)
 
-            .zIndex(10)
-            .frame(width: 100)
-            .clipped()
-            .labelsHidden()
+        .zIndex(10)
+        .frame(width: 100)
+        .clipped()
+        .labelsHidden()
 
-            Text("To ")
+        Text(LocalizedString("To ", comment: "Very short text describing separation between start and end datetimes"))
 
-            Picker("", selection: $externalState.end.animation(), content: {
-                ForEach(endTimes.indices) { i in
-                    Text("\(endTimes[i])").tag(i)
-               }
-            })
-            // .border(Color.red)
-            .zIndex(11)
-            .frame(width: 100)
-            .clipped()
-            .labelsHidden()
+        Picker("", selection: $externalState.end,
+          content: {
+            ForEach(endTimes.indices) { i in
+              Text("\(endTimes[i])").tag(i)
+            }
+          }
+        )
+        // .border(Color.red)
+        .zIndex(11)
+        .frame(width: 100)
+        .clipped()
+        .labelsHidden()
 
         // }
 
         .navigationBarBackButtonHidden(true)
-        .navigationBarItems(leading:
+        .navigationBarItems(
+          leading:
             Button("Cancel") {
-                print("cancel button pressed, restoring state...")
-                restoreAlarmExternalState()
-                popView()
+              print("cancel button pressed, restoring state...")
+              restoreAlarmExternalState()
+              popView()
 
-            }.accentColor(.red), trailing:
-                Button("Save") {
-                    print("Save button pressed...")
-                    verifyRange()
-                }
-                .accentColor(.red)
+            }.accentColor(.red),
+          trailing:
+            Button("Save") {
+              print("Save button pressed...")
+              verifyRange()
+            }
+            .disabled(saveButtonDisabled)
+            .accentColor(.red)
 
         )
-        }
+      }
 
     }
 
     @State private var presentableStatus: StatusMessage?
+    @State private var saveButtonDisabled = true
 
     private func updateTextualState(_ shouldDelete: Bool = false) {
         if shouldDelete {
@@ -158,7 +166,7 @@ struct CustomDataPickerView: View {
             return
         }
         if let p1 = externalState.startComponents?.ToTimeString(), let p2 = externalState.endComponents?.ToTimeString() {
-            externalState.componentsAsText = "\(p1)-\(p2)"
+            externalState.componentsAsText = "\(p1) - \(p2)"
         }
     }
 
@@ -169,11 +177,13 @@ struct CustomDataPickerView: View {
         .onChange(of: externalState.start, perform: { value in
             print("selectedtart changed to \(value)")
             externalState.startComponents = startComponentTimes[value]
+            saveButtonDisabled = false
 
         })
         .onChange(of: externalState.end, perform: { value in
             print("selectedEnd changed to \(value)")
             externalState.endComponents = endComponentTimes[value]
+            saveButtonDisabled = false
 
         })
         .onAppear {

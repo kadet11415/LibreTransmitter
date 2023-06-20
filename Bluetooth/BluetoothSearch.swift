@@ -2,8 +2,8 @@
 //  BluetoothSearch.swift
 //  MiaomiaoClientUI
 //
-//  Created by Bjørn Inge Berg on 26/07/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 26/07/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import CoreBluetooth
@@ -150,12 +150,12 @@ final class BluetoothSearchManager: NSObject, CBCentralManagerDelegate, CBPeriph
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         guard let name = peripheral.name?.lowercased() else {
-            logger.debug("dabear:: could not find name for device \(peripheral.identifier.uuidString)")
+            logger.debug("could not find name for device \(peripheral.identifier.uuidString)")
             return
         }
 
         if LibreTransmitters.isSupported(peripheral) {
-            logger.debug("dabear:: did recognize device: \(name): \(peripheral.identifier)")
+            logger.debug("did recognize device: \(name): \(peripheral.identifier)")
             self.addDiscoveredDevice(peripheral, with: advertisementData, rssi: RSSI.intValue)
             // peripheral.delegate = self
             // peripheral.readRSSI()
@@ -165,13 +165,13 @@ final class BluetoothSearchManager: NSObject, CBCentralManagerDelegate, CBPeriph
 
                 let name = String(describing: peripheral.name)
 
-                logger.debug("dabear:: did add unknown device due to dangermode being active \(name): \(peripheral.identifier)")
+                logger.debug("did add unknown device due to dangermode being active \(name): \(peripheral.identifier)")
                 self.addDiscoveredDevice(peripheral, with: advertisementData, rssi: RSSI.intValue)
                 // peripheral.delegate = self
                 // peripheral.readRSSI()
 
             } else {
-                logger.debug("dabear:: did not add unknown device: \(name): \(peripheral.identifier)")
+                logger.debug("did not add unknown device: \(name): \(peripheral.identifier)")
             }
         }
     }
@@ -193,7 +193,7 @@ final class BluetoothSearchManager: NSObject, CBCentralManagerDelegate, CBPeriph
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         logger.debug("Did discover services")
-        if let error = error {
+        if let error {
             logger.error("Did discover services error: \(error.localizedDescription)")
         }
 
@@ -209,7 +209,7 @@ final class BluetoothSearchManager: NSObject, CBCentralManagerDelegate, CBPeriph
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         logger.debug("Did discover characteristics for service \(String(describing: peripheral.name))")
 
-        if let error = error {
+        if let error {
             logger.error("Did discover characteristics for service error: \(error.localizedDescription)")
         }
 
@@ -250,6 +250,6 @@ final class BluetoothSearchManager: NSObject, CBCentralManagerDelegate, CBPeriph
     }
 
     deinit {
-        logger.debug("dabear:: BluetoothSearchManager deinit called")
+        logger.debug("BluetoothSearchManager deinit called")
     }
 }

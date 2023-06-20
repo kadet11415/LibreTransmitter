@@ -2,8 +2,8 @@
 //  UserDefaults+Bluetooth.swift
 //  MiaomiaoClientUI
 //
-//  Created by Bjørn Inge Berg on 27/07/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 27/07/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
@@ -11,8 +11,8 @@ import Foundation
 
 extension UserDefaults {
     private enum Key: String {
-        case bluetoothDeviceUUIDString = "no.bjorninge.bluetoothDeviceUUIDString"
-        case libre2UiD = "no.bjorninge.libre2uid"
+        case bluetoothDeviceUUIDString = "com.loopkit.librebluetoothDeviceUUIDString"
+        case libre2UiD = "com.loopkit.libre2uid"
     }
 
     public var preSelectedUid: Data? {
@@ -21,7 +21,7 @@ extension UserDefaults {
 
         }
         set {
-            if let newValue = newValue {
+            if let newValue {
                 set(newValue, forKey: Key.libre2UiD.rawValue)
             } else {
                 print("Removing preSelectedUid")
@@ -38,7 +38,7 @@ extension UserDefaults {
             return nil
         }
         set {
-            if let newValue = newValue {
+            if let newValue {
                 set(newValue, forKey: Key.bluetoothDeviceUUIDString.rawValue)
             } else {
                 removeObject(forKey: Key.bluetoothDeviceUUIDString.rawValue)

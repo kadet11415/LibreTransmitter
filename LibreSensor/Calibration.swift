@@ -2,8 +2,8 @@
 //  Calibration.swift
 //  MiaomiaoClient
 //
-//  Created by Bjørn Inge Berg on 05/03/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 05/03/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
@@ -16,11 +16,12 @@ private let LibreUsername = "LibreUsername"
 
 private var logger = Logger(forType: "KeychainManagerCalibration")
 
-public extension KeychainManagerWrapper {
+public extension KeychainManager {
+    static public var standard = KeychainManager()
     func setLibreNativeCalibrationData(_ calibrationData: SensorData.CalibrationInfo) throws {
         let credentials: InternetCredentials?
         credentials = InternetCredentials(username: LibreUsername, password: serializeNativeAlgorithmParameters(calibrationData), url: LibreCalibrationUrl)
-        logger.debug("dabear: Setting calibrationdata to \(String(describing: calibrationData))")
+        logger.debug("Setting calibrationdata to \(String(describing: calibrationData))")
         try replaceInternetCredentials(credentials, forLabel: LibreCalibrationLabel)
     }
 
@@ -28,6 +29,7 @@ public extension KeychainManagerWrapper {
         do { // Silence all errors and return nil
             let credentials = try getInternetCredentials(label: LibreCalibrationLabel)
             return deserializeNativeAlgorithmParameters(text: credentials.password)
+
         } catch {
 
             return nil

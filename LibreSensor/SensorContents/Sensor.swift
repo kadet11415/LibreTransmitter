@@ -1,7 +1,7 @@
 public extension UserDefaults {
     private enum Key: String {
-        case sensor = "no.bjorninge.libre2sensor"
-        case calibrationMapping = "no.bjorninge.libre2sensor-calibrationmapping"
+        case sensor = "com.loopkit.libre2sensor"
+        case calibrationMapping = "com.loopkit.libre2sensor-calibrationmapping"
 
     }
 
@@ -17,7 +17,7 @@ public extension UserDefaults {
 
         }
         set {
-            if let newValue = newValue {
+            if let newValue {
                 let encoder = JSONEncoder()
                 if let encoded = try? encoder.encode(newValue) {
                     set(encoded, forKey: Key.sensor.rawValue)
@@ -39,7 +39,7 @@ public extension UserDefaults {
 
         }
         set {
-            if let newValue = newValue {
+            if let newValue {
                 let encoder = JSONEncoder()
                 if let encoded = try? encoder.encode(newValue) {
                     set(encoded, forKey: Key.calibrationMapping.rawValue)
@@ -60,6 +60,10 @@ public struct CalibrationToSensorMapping: Codable {
         self.reverseFooterCRC = reverseFooterCRC
     }
 }
+public enum Libre2IdentificationStrategy: Int, Codable {
+    case byUid = 0 //default
+    case byFakeSensorName = 1 //only when used with tzachi-dar-simulator
+}
 
 public struct Sensor: Codable {
     public let uuid: Data
@@ -76,6 +80,10 @@ public struct Sensor: Codable {
    // public var lifetime: Int
 
     public var unlockCount: Int
+    
+    var initialIdentificationStrategy: Libre2IdentificationStrategy
+    
+    var sensorName : String?
 
     /*
     public var unlockCount: Int {
@@ -90,7 +98,7 @@ public struct Sensor: Codable {
     /*
     public var elapsedLifetime: Int? {
         get {
-            if let remainingLifetime = remainingLifetime {
+            if let remainingLifetime {
                 return max(0, lifetime - remainingLifetime)
             }
 
@@ -100,7 +108,7 @@ public struct Sensor: Codable {
 
     public var remainingLifetime: Int? {
         get {
-            if let age = age {
+            if let age {
                 return max(0, lifetime - age)
             }
 
@@ -108,7 +116,7 @@ public struct Sensor: Codable {
         }
     } */
 
-    public init(uuid: Data, patchInfo: Data, maxAge: Int, unlockCount: Int = 0) {
+    public init(uuid: Data, patchInfo: Data, maxAge: Int, unlockCount: Int = 0, initialIdentificationStrategy: Libre2IdentificationStrategy = .byUid, sensorName: String? = nil) {
         self.uuid = uuid
         self.patchInfo = patchInfo
 
@@ -121,6 +129,8 @@ public struct Sensor: Codable {
         self.unlockCount = 0
         self.maxAge = maxAge
         // self.calibrationInfo = calibrationInfo
+        self.initialIdentificationStrategy = initialIdentificationStrategy
+        self.sensorName = sensorName
     }
 
     public var description: String {
@@ -141,35 +151,3 @@ public struct Sensor: Codable {
 private enum Key: String, CaseIterable {
     case sensorUnlockCount = "libre-direct.settings.sensor.unlockCount"
 }
-
-/*
-fileprivate func sensorSerialNumber(sensorUID: Data, sensorFamily: SensorFamily) -> String? {
-    let lookupTable = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "T", "U", "V", "W", "X", "Y", "Z"]
-
-    guard sensorUID.count == 8 else {
-        return nil
-    }
-
-    let bytes = Array(sensorUID.reversed().suffix(6))
-    var fiveBitsArray = [UInt8]()
-    fiveBitsArray.append(bytes[0] >> 3)
-    fiveBitsArray.append(bytes[0] << 2 + bytes[1] >> 6)
-
-    fiveBitsArray.append(bytes[1] >> 1)
-    fiveBitsArray.append(bytes[1] << 4 + bytes[2] >> 4)
-
-    fiveBitsArray.append(bytes[2] << 1 + bytes[3] >> 7)
-
-    fiveBitsArray.append(bytes[3] >> 2)
-    fiveBitsArray.append(bytes[3] << 3 + bytes[4] >> 5)
-
-    fiveBitsArray.append(bytes[4])
-
-    fiveBitsArray.append(bytes[5] >> 3)
-    fiveBitsArray.append(bytes[5] << 2)
-
-    return fiveBitsArray.reduce("\(sensorFamily.rawValue)", {
-        $0 + lookupTable[Int(0x1F & $1)]
-    })
-}
- */

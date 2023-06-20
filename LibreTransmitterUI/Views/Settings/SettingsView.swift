@@ -2,8 +2,8 @@
 //  SettingsOverview.swift
 //  LibreTransmitterUI
 //
-//  Created by Bjørn Inge Berg on 12/06/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 12/06/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import SwiftUI
@@ -24,7 +24,7 @@ public struct SettingsItem: View {
     }
 
     // basically allows caller to set a static string without having to use .constant
-    init(title: String, detail: String) {
+    init(title: String, detail: String="") {
         self.title = title
         self._detail = Binding<String>(get: {
             detail
@@ -36,62 +36,14 @@ public struct SettingsItem: View {
     public var body: some View {
         HStack {
             Text(title)
-            Spacer()
-            Text(detail).font(.subheadline)
+            if !detail.isEmpty {
+                Spacer()
+                Text(detail).font(.subheadline)
+            }
+            
         }
 
     }
-}
-
-private class FactoryCalibrationInfo: ObservableObject, Equatable, Hashable {
-    @Published var i1 = ""
-    @Published var i2 = ""
-    @Published var i3 = ""
-    @Published var i4 = ""
-    @Published var i5 = ""
-    @Published var i6 = ""
-    @Published var validForFooter = ""
-    
-    // For swiftuis stateobject to be able to compare two objects for equality,
-    // we must exclude the publishers them selves in the comparison
-
-   static func == (lhs: FactoryCalibrationInfo, rhs: FactoryCalibrationInfo) -> Bool {
-        lhs.i1 == rhs.i1 && lhs.i2 == rhs.i2 &&
-        lhs.i3 == rhs.i3 && lhs.i4 == rhs.i4 &&
-        lhs.i5 == rhs.i5 && lhs.i6 == rhs.i6 &&
-        lhs.validForFooter == rhs.validForFooter
-
-    }
-
-    // todo: consider using cgmmanagers observable directly
-    static func loadState() -> FactoryCalibrationInfo {
-
-        let newState = FactoryCalibrationInfo()
-
-        // User editable calibrationdata: keychain.getLibreNativeCalibrationData()
-        // Default Calibrationdata stored in sensor: cgmManager?.calibrationData
-
-        // do not change this, there is UI support for editing calibrationdata anyway
-        guard let c = KeychainManagerWrapper.standard.getLibreNativeCalibrationData() else {
-            return newState
-        }
-
-        newState.i1 = String(c.i1)
-        newState.i2 = String(c.i2)
-        newState.i3 = String(c.i3)
-        newState.i4 = String(c.i4)
-        newState.i5 = String(c.i5)
-        newState.i6 = String(c.i6)
-        newState.validForFooter = String(c.isValidForFooterWithReverseCRCs)
-
-        return newState
-    }
-
-}
-
-class SettingsModel: ObservableObject {
-    @Published  fileprivate var factoryCalibrationInfos = [FactoryCalibrationInfo()]
-
 }
 
 struct SettingsView: View {
@@ -104,31 +56,35 @@ struct SettingsView: View {
 
     @ObservedObject private var notifyComplete: GenericObservableObject
     @ObservedObject private var notifyDelete: GenericObservableObject
-
-    // most of the settings are now retrieved from the cgmmanager observables instead
-    @StateObject var model = SettingsModel()
+    @ObservedObject private var notifyReset: GenericObservableObject
+    @ObservedObject private var notifyReconnect: GenericObservableObject
+   
     @State private var presentableStatus: StatusMessage?
     @ObservedObject var alarmStatus: LibreTransmitter.AlarmStatus
 
     @State private var showingDestructQuestion = false
-    @State private var showingExporter = false
+    // @State private var showingExporter = false
     // @Environment(\.presentationMode) var presentationMode
 
     static func asHostedViewController(
         displayGlucoseUnitObservable: DisplayGlucoseUnitObservable,
         notifyComplete: GenericObservableObject,
         notifyDelete: GenericObservableObject,
+        notifyReset: GenericObservableObject,
+        notifyReconnect: GenericObservableObject,
         transmitterInfoObservable: LibreTransmitter.TransmitterInfo,
         sensorInfoObervable: LibreTransmitter.SensorInfo,
         glucoseInfoObservable: LibreTransmitter.GlucoseInfo,
-        alarmStatus: LibreTransmitter.AlarmStatus) -> UIHostingController<SettingsView> {
-        UIHostingController(rootView: self.init(
+        alarmStatus: LibreTransmitter.AlarmStatus) -> DismissibleHostingController {
+            DismissibleHostingController(rootView: self.init(
             displayGlucoseUnitObservable: displayGlucoseUnitObservable,
             transmitterInfo: transmitterInfoObservable,
             sensorInfo: sensorInfoObervable,
             glucoseMeasurement: glucoseInfoObservable,
             notifyComplete: notifyComplete,
             notifyDelete: notifyDelete,
+            notifyReset: notifyReset,
+            notifyReconnect: notifyReconnect,
             alarmStatus: alarmStatus
 
         ))
@@ -140,70 +96,62 @@ struct SettingsView: View {
 
     static let formatter = NumberFormatter()
 
-    var dangerModeActivated: Binding<String> = ({
-        Binding(
-            get: { UserDefaults.standard.dangerModeActivated ? "Activated" : "Not activated" },
-            set: { _ in
-                // UserDefaults.standard.dangerModeActivated = newVal
-                // we dont support setting it currently
-            })
-    }
-
-    )()
-
     // no navigationview necessary when running inside a uihostingcontroller
     // uihostingcontroller seems to add a navigationview for us, causing problems if we
     // also add one herer
     var body: some View {
-        overview
-            // .navigationViewStyle(StackNavigationViewStyle())
-            .navigationBarTitle(Text("Libre Bluetooth"), displayMode: .inline)
-            .navigationBarItems(trailing: dismissButton)
+            List {
+                headerSection
+                snoozeSection
+                measurementSection
+                if !glucoseMeasurement.predictionDate.isEmpty {
+                    predictionSection
+                }
+                
+                NavigationLink(destination: deviceInfoSection) {
+                    SettingsItem(title: "Device details")
+                }
+                
+                NavigationLink(destination: CalibrationEditView()) {
+                    Button(Features.allowsEditingFactoryCalibrationData ? "Edit calibrations" : "View factory calibrations") {
+                        print("edit calibration clicked")
+                    }
+                }
+                advancedSection
+                sensorChangeSection
+                destructSection
+                
+            }.listStyle(InsetGroupedListStyle())
             .onAppear {
-                print("dabear:: settingsview appeared")
-                // While loop does this request on our behalf, freeaps does not
-                NotificationHelper.requestNotificationPermissionsIfNeeded()
-
                 // only override savedglucose unit if we haven't saved this locally before
                 if UserDefaults.standard.mmGlucoseUnit == nil {
                     UserDefaults.standard.mmGlucoseUnit = glucoseUnit
                 }
-                // Yes we load factory calibrationdata every time the view appears
-                // I know this is  bad, but the calibrationdata is stored in
-                // the keychain and there is no simple way of wrapping the keychain
-                // as an observable in swiftui without bringing in large third party
-                // dependencies or hand crafting it, which would be error prone
-
-                let newFactoryInfo = FactoryCalibrationInfo.loadState()
-
-                if newFactoryInfo != self.model.factoryCalibrationInfos.first {
-                    print("dabear:: factoryinfo was new")
-
-                    self.model.factoryCalibrationInfos.removeAll()
-                    self.model.factoryCalibrationInfos.append(newFactoryInfo)
-
-                }
-
+                
             }
-
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    doneButton
+                }
+            }
+            .navigationTitle("Libre Bluetooth")
     }
 
     var snoozeSection: some View {
         Section {
             NavigationLink(destination: SnoozeView(isAlarming: $alarmStatus.isAlarming, activeAlarms: $alarmStatus.glucoseScheduleAlarmResult)) {
-                if alarmStatus.isAlarming {
-                    Text("Snooze Alerts").frame(alignment: .center)
-                        .padding(.top, 30)
-                        .padding(.bottom, 30)
-                } else {
-                    Text("Snooze Alerts").frame(alignment: .center)
-                }
+                Image(systemName: "pause.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(.blue)
+                Text(LocalizedString("Pause Glucose alarms", comment: "Text for pausing glucose alarms")).frame(alignment: .center)
+                    .foregroundColor(.blue)
+                
             }
         }
     }
 
     var measurementSection : some View {
-        Section(header: Text("Last measurement")) {
+        Section(header: Text(LocalizedString("Last measurement", comment: "Text describing header for last measurement section"))) {
             if glucoseUnit == .millimolesPerLiter {
                     SettingsItem(title: "Glucose", detail: $glucoseMeasurement.glucoseMMOL)
             } else if glucoseUnit == .milligramsPerDeciliter {
@@ -216,11 +164,11 @@ struct SettingsView: View {
     }
 
     var predictionSection : some View {
-        Section(header: Text("Last Blood Sugar prediction")) {
+        Section(header: Text(LocalizedString("Last Blood Sugar prediction", comment: "Text describing header for Blood Sugar prediction section"))) {
             if glucoseUnit == .millimolesPerLiter {
                     SettingsItem(title: "CurrentBG", detail: $glucoseMeasurement.predictionMMOL)
             } else if glucoseUnit == .milligramsPerDeciliter {
-                    SettingsItem(title: "Glucose", detail: $glucoseMeasurement.predictionMGDL)
+                    SettingsItem(title: "CurrentBG", detail: $glucoseMeasurement.predictionMGDL)
             }
 
             SettingsItem(title: "Date", detail: $glucoseMeasurement.predictionDate )
@@ -228,66 +176,59 @@ struct SettingsView: View {
         }
     }
 
-    var sensorInfoSection : some View {
-        Section(header: Text("Sensor Info")) {
-            SettingsItem(title: "Sensor Age", detail: $sensorInfo.sensorAge )
-            SettingsItem(title: "Sensor Age Left", detail: $sensorInfo.sensorAgeLeft )
-            SettingsItem(title: "Sensor Endtime", detail: $sensorInfo.sensorEndTime )
-            SettingsItem(title: "Sensor State", detail: $sensorInfo.sensorState )
-            SettingsItem(title: "Sensor Serial", detail: $sensorInfo.sensorSerial )
-        }
-    }
-
-    var transmitterInfoSection: some View {
-        Section(header: Text("Transmitter Info")) {
-            if !transmitterInfo.battery.isEmpty {
-                SettingsItem(title: "Battery", detail: $transmitterInfo.battery )
-            }
-            SettingsItem(title: "Hardware", detail: $transmitterInfo.hardware )
-            SettingsItem(title: "Firmware", detail: $transmitterInfo.firmware )
-            SettingsItem(title: "Connection State", detail: $transmitterInfo.connectionState )
-            SettingsItem(title: "Transmitter Type", detail: $transmitterInfo.transmitterType )
-            SettingsItem(title: "Mac", detail: $transmitterInfo.transmitterIdentifier )
-            SettingsItem(title: "Sensor Type", detail: $transmitterInfo.sensorType )
-        }
-    }
-
-    var factoryCalibrationSection: some View {
-        Section(header: Text("Factory Calibration Parameters")) {
-            ForEach(self.model.factoryCalibrationInfos, id: \.self) { factoryCalibrationInfo in
-
-                SettingsItem(title: "i1", detail: factoryCalibrationInfo.i1 )
-                SettingsItem(title: "i2", detail: factoryCalibrationInfo.i2 )
-                SettingsItem(title: "i3", detail: factoryCalibrationInfo.i3 )
-                SettingsItem(title: "i4", detail: factoryCalibrationInfo.i4 )
-                SettingsItem(title: "i5", detail: factoryCalibrationInfo.i5 )
-                SettingsItem(title: "i6", detail: factoryCalibrationInfo.i6 )
-                SettingsItem(title: "Valid for footer", detail: factoryCalibrationInfo.validForFooter )
-            }
-
-            ZStack {
-                NavigationLink(destination: CalibrationEditView()) {
-                    Button("Edit calibrations") {
-                        print("edit calibration clicked")
-                    }
+    var deviceInfoSection: some View {
+        List {
+            Section(header: Text(LocalizedString("Device Info", comment: "Text describing header for device info section"))) {
+                if !transmitterInfo.battery.isEmpty {
+                    SettingsItem(title: "Battery", detail: $transmitterInfo.battery )
                 }
-
+                
+                // The firmware version is not always extractable for all devices
+                // and the libre2 direct version does not support it at all
+                if !transmitterInfo.hardware.isEmpty {
+                    SettingsItem(title: "Hardware", detail: $transmitterInfo.hardware )
+                }
+                // The firmware version is not always extractable for all devices
+                // and the libre2 direct version does not support it at all
+                if !transmitterInfo.firmware.isEmpty {
+                    SettingsItem(title: "Firmware", detail: $transmitterInfo.firmware )
+                }
+                
+                SettingsItem(title: "Connection State", detail: $transmitterInfo.connectionState )
+                SettingsItem(title: "Transmitter Type", detail: $transmitterInfo.transmitterType )
+                
+                // The mac address of a given device is normally not available on ios
+                // Only the bluetooth identifier, which is a normalized derivative of the mac address is available
+                // However, some transmitters, such as the bubble, provide their own mac address as part of its advertisement info
+                // which we extract and put herer
+                if !transmitterInfo.transmitterMacAddress.isEmpty {
+                    SettingsItem(title: "Mac", detail: $transmitterInfo.transmitterMacAddress )
+                }
+                
+                SettingsItem(title: "Sensor Type", detail: $transmitterInfo.sensorType )
+                
+                SettingsItem(title: "Sensor Start", detail: sensorInfo.activatedAtString )
+                SettingsItem(title: "Sensor End", detail: sensorInfo.expiresAtString )
             }
-
         }
+        .textSelection(.enabled)
     }
 
-    private var dismissButton: some View {
-        Button( action: {
-            // This should be enough
-            // self.presentationMode.wrappedValue.dismiss()
-
-            // but since Loop uses uihostingcontroller wrapped in cgmviewcontroller we need
-            // to notify the parent to close the cgmviewcontrollers navigation
+    private var doneButton: some View {
+        Button("Done", action: {
             notifyComplete.notify()
-        }, label:  {
-            Text("Done")
         })
+    }
+    
+    var sensorChangeSection: some View {
+        
+        Section {
+            NavigationLink(destination: AuthView(completeNotifier: notifyComplete, notifyReset: notifyReset, notifyReconnect: notifyReconnect)) {
+                /*Button("Change Sensor") {
+                }.foregroundColor(.blue)*/
+                SettingsItem(title: "Change Sensor").foregroundColor(.blue)
+            }
+        }
     }
 
     var destructSection: some View {
@@ -297,11 +238,17 @@ struct SettingsView: View {
             }.foregroundColor(.red)
             .alert(isPresented: $showingDestructQuestion) {
                 Alert(
-                    title: Text("Are you sure you want to remove this cgm from loop?"),
-                    message: Text("There is no undo"),
-                    primaryButton: .destructive(Text("Delete")) {
-
-                        notifyDelete.notify()
+                    title: Text(LocalizedString("Are you sure you want to remove this cgm from loop?", comment: "Text describing question to remove the cgmmanager from loop")),
+                    message: Text(LocalizedString("There is no undo. Deleting requires authentication!", comment: "Text warning user there is no undo for deleting cgmmanager")),
+                    primaryButton: .destructive(Text(LocalizedString("Delete", comment: "Action text for deleting cgmmanager"))) {
+                        
+                        self.authenticate { success in
+                            print("got authentication response: \(success)")
+                            if success {
+                                notifyDelete.notify()
+                            }
+                        }
+                        
                     },
                     secondaryButton: .cancel()
                 )
@@ -310,118 +257,208 @@ struct SettingsView: View {
         }
     }
 
-    // todo: replace sub with navigationlinks
     var advancedSection: some View {
-        Section(header: Text("Advanced")) {
+        Section(header: Text(LocalizedString("Advanced", comment: "Text describing header for advanced settings section"))) {
             // these subviews don't really need to be notified once glucose unit changes
             // so we just pass glucoseunit directly on init
-            ZStack {
-                NavigationLink(destination: AlarmSettingsView(glucoseUnit: self.glucoseUnit)) {
-                    SettingsItem(title: "Alarms", detail: .constant(""))
+            NavigationLink(destination: AlarmSettingsView(glucoseUnit: self.glucoseUnit)) {
+                SettingsItem(title: "Alarms")
+            }
+            
+            if NotificationHelper.criticalAlarmsEnabled {
+                NavigationLink(destination: CriticalAlarmsVolumeView()) {
+                    SettingsItem(title: "Critical Alarms volume")
                 }
             }
-            ZStack {
-                NavigationLink(destination: GlucoseSettingsView(glucoseUnit: self.glucoseUnit)) {
-                    SettingsItem(title: "Glucose Settings", detail: .constant(""))
-                }
+            
+            NavigationLink(destination: GlucoseSettingsView(glucoseUnit: self.glucoseUnit)) {
+                SettingsItem(title: "Glucose Settings")
             }
-
-            ZStack {
-                NavigationLink(destination: NotificationSettingsView(glucoseUnit: self.glucoseUnit)) {
-                    SettingsItem(title: "Notifications", detail: .constant(""))
-                }
+        
+            NavigationLink(destination: NotificationSettingsView(glucoseUnit: self.glucoseUnit)) {
+                SettingsItem(title: "Notifications")
             }
-
-            // Decided against adding ui for activating danger mode this time
-            // Consider doing it in the future, but no rush. dangermode is only used for calibrationedit and bluetooth devices debugging.
-
-            SettingsItem(title: "Danger mode", detail: dangerModeActivated)
-                .onTapGesture {
-                    print("danger mode tapped")
-                    presentableStatus = StatusMessage(title: "Danger mode", message: "Danger mode was a legacy ui only feature")
-                }
 
         }
     }
-
-    var logExportSection : some View {
+    
+    private var daysRemaining: Int? {
+        if let remaining = sensorInfo.expiresAt?.timeIntervalSinceNow, remaining > .days(1) {
+            return Int(remaining.days)
+        }
+        return nil
+    }
+    
+    private var hoursRemaining: Int? {
+    
+        if let remaining = sensorInfo.expiresAt?.timeIntervalSinceNow, remaining > .hours(1) {
+            return Int(remaining.hours.truncatingRemainder(dividingBy: 24))
+        }
+        return nil
+    }
+    
+    private var minutesRemaining: Int? {
+        
+        if let remaining = sensorInfo.expiresAt?.timeIntervalSinceNow, remaining < .hours(2) {
+            return Int(remaining.minutes.truncatingRemainder(dividingBy: 60))
+        }
+        return nil
+    }
+    
+    func timeComponent(value: Int, units: String) -> some View {
+        Group {
+            Text(String(value)).font(.system(size: 28)).fontWeight(.heavy)
+                .foregroundColor(.primary)
+                // .foregroundColor(viewModel.podOk ? .primary : .secondary)
+            Text(units).foregroundColor(.secondary)
+        }
+    }
+    
+    var sensorIsExpired : Bool {
+        if let expiresAt = sensorInfo.expiresAt {
+            return expiresAt.timeIntervalSinceNow < 0
+        }
+        
+        return false
+    }
+    
+    var showProgress : Bool {
+        
+        if let expiresAt = sensorInfo.expiresAt,let activatedAt = sensorInfo.activatedAt {
+            return expiresAt.timeIntervalSinceNow > 0
+        }
+        
+        return false
+    }
+    
+    var lifecycleProgress: some View {
+        VStack(spacing: 2) {
+            HStack(alignment: .lastTextBaseline, spacing: 3) {
+                if showProgress {
+                    Text(LocalizedString("Sensor expires in ", comment: "Text describing sensor expires in label in settingsview"))
+                        .foregroundColor(.secondary)
+                }/* else {
+                    Text(LocalizedString("No Connection: ", comment: "Text describing no connection label in settingsview"))
+                        .foregroundColor(.secondary)
+                    + Text("\(transmitterInfo.connectionState)")
+                        .foregroundColor(.secondary)
+                }*/
+                
+                Spacer()
+                if showProgress {
+                    daysRemaining.map { (days) in
+                        timeComponent(value: days, units: days == 1 ?
+                                      LocalizedString("day", comment: "Unit for singular day in sensor liferemaining") :
+                                        LocalizedString("days", comment: "Unit for plural days in sensor life remaining"))
+                    }
+                    hoursRemaining.map { (hours) in
+                        timeComponent(value: hours, units: hours == 1 ?
+                                      LocalizedString("hour", comment: "Unit for singular hour in sensor life remaining") :
+                                        LocalizedString("hours", comment: "Unit for plural hours in sensor life remaining"))
+                    }
+                    minutesRemaining.map { (minutes) in
+                        timeComponent(value: minutes, units: minutes == 1 ?
+                                      LocalizedString("minute", comment: "Unit for singular minute in sensor life remaining") :
+                                        LocalizedString("minutes", comment: "Unit for plural minutes in sensor life remaining"))
+                    }
+                }
+            }
+            if showProgress {
+                
+                SwiftUI.ProgressView(value: sensorInfo.calculateProgress())
+                    .scaleEffect(x: 1, y: 4, anchor: .center)
+                    .padding(.top, 2)
+                // ProgressView(progress: ))
+                Spacer()
+            }
+            // .accentColor(self.viewModel.lifeState.progressColor(guidanceColors: guidanceColors))
+        }
+    }
+    
+    var headerImage: some View {
+        VStack(alignment: .center) {
+            Image(uiImage: UIImage(named: "libresensor200", in: Bundle.current, compatibleWith: nil)!)
+                .resizable()
+                .aspectRatio(contentMode: ContentMode.fit)
+                .frame(height: 100)
+                .padding(.horizontal)
+        }.frame(maxWidth: .infinity)
+    }
+    
+    var sensorStatusText : String {
+        let ret = sensorInfo.sensorState
+        return ret.isEmpty ? " - " : ret
+    }
+    var sensorStatus: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(LocalizedString("Sensor State", comment: "Text describing Sensor state label in settingsview"))
+                .fontWeight(.heavy)
+                .fixedSize()
+            Text("\(sensorStatusText)")
+                .foregroundColor(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+    
+    var sensorSerialText : String {
+        let ret = sensorInfo.sensorSerial
+        print("got serial: \(ret)")
+        return ret.isEmpty ? " - " : ret
+    }
+    
+    var sensorSerial : some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(LocalizedString("Sensor Serial", comment: "Text describing Sensor serial label in settingsview"))
+                // .font(.system(size: 1))
+                .fontWeight(.heavy)
+                .fixedSize()
+            Text("\(sensorSerialText)")
+                .foregroundColor(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+    
+    var headerSection: some View {
         Section {
-            Button("Export logs") {
-                if Features.supportsLogExport {
-                    showingExporter = true
-                } else {
-                    presentableStatus = StatusMessage(title: "Export not available", message: "Log export requires ios 15")
+            VStack(alignment: .trailing) {
+                
+                Spacer()
+                headerImage
+                
+                lifecycleProgress
+                Spacer()
+                HStack(alignment: .top) {
+                    sensorStatus
+                    Spacer()
+                    sensorSerial
                 }
-            }.foregroundColor(.blue)
-
-        }
-    }
-
-    var overview: some View {
-        List {
-
-            snoozeSection
-            measurementSection
-            if !glucoseMeasurement.predictionDate.isEmpty {
-                predictionSection
+                
+                /*Divider()
+                Text("some faultAction")
+                    .font(Font.footnote.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                 */
+                
             }
-            sensorInfoSection
-            transmitterInfoSection
-            factoryCalibrationSection
-            advancedSection
-
-            // disable for now due to null byte document issues
-            if true {
-                logExportSection
-            }
-
-            destructSection
-
-        }
-        .fileExporter(isPresented: $showingExporter, document: LogsAsTextFile(), contentType: .plainText) { result in
-            switch result {
-            case .success(let url):
-                print("Saved to \(url)")
-            case .failure(let error):
-                print(error.localizedDescription)
+            if sensorIsExpired {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Sensor is expired")
+                        .font(Font.subheadline.weight(.bold))
+                    Text("Replace sensor immediately to continue receving glucose values")
+                        .font(Font.footnote.weight(.semibold))
+                }.padding(.vertical, 8)
+            } else if !["Notifying", "Connected"].contains(transmitterInfo.connectionState) || !showProgress {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(LocalizedString("No Connection: ", comment: "Text describing no connection label in settingsview"))
+                        .font(Font.subheadline.weight(.bold))
+                     Text("\(transmitterInfo.connectionState)")
+                        .font(Font.footnote.weight(.semibold))
+                }.padding(.vertical, 8)
             }
         }
-        .listStyle(InsetGroupedListStyle())
-        .alert(item: $presentableStatus) { status in
-            Alert(title: Text(status.title), message: Text(status.message), dismissButton: .default(Text("Got it!")))
-        }
-
     }
 
-}
-
-struct LogsAsTextFile: FileDocument {
-    // tell the system we support only plain text
-    static var readableContentTypes = [UTType.plainText]
-
-    // a simple initializer that creates new, empty documents
-    init() {
-    }
-
-    // this initializer loads data that has been saved previously
-    init(configuration: ReadConfiguration) throws {
-    }
-
-    // this will be called when the system wants to write our data to disk
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        var data = Data()
-        do {
-            data = try getLogs()
-        } catch {
-            data.append("No logs available".data(using: .utf8, allowLossyConversion: false)!)
-        }
-
-        let wrapper = FileWrapper(regularFileWithContents: data)
-        let today = Date().getFormattedDate(format: "yyyy-MM-dd")
-        wrapper.preferredFilename = "libretransmitterlogs-\(today).txt"
-        return wrapper
-
-    }
 }
 
 struct SettingsOverview_Previews: PreviewProvider {

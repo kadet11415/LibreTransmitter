@@ -2,14 +2,19 @@
 //  Libre2DirectSetup.swift
 //  LibreTransmitterUI
 //
-//  Created by Bjørn Inge Berg on 30/08/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 30/08/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import SwiftUI
 import LibreTransmitter
+import LoopKitUI
+import LoopKit
+import os.log
 
 #if canImport(CoreNFC)
+
+fileprivate var logger = Logger(forType: "Libre2DirectSetup")
 
 struct Libre2DirectSetup: View {
 
@@ -22,8 +27,28 @@ struct Libre2DirectSetup: View {
 
     @ObservedObject public var cancelNotifier: GenericObservableObject
     @ObservedObject public var saveNotifier: GenericObservableObject
+    
+    public var isMockedSensor = false
+    
+    
+    func pairMockedSensor() {
+        let info = FakeSensorPairingData().fakeSensorPairingInfo()
+        logger.debug("Sending fake sensor pairinginfo: \(info.description)")
+        //delay a bit to simulate a real tag readout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            receivePairingInfo(info)
+        }
+        
+        
+    }
 
     func pairSensor() {
+        
+        guard !isMockedSensor else {
+            pairMockedSensor()
+            return
+        }
+        
         if !Features.phoneNFCAvailable {
             presentableStatus = StatusMessage(title: "Phone NFC required!", message: "Your phone or app is not enabled for NFC communications, which is needed to pair to libre2 sensors")
             return
@@ -46,7 +71,7 @@ struct Libre2DirectSetup: View {
         // calibrationdata must always be extracted from the full nfc scan
         if let calibrationData = info.calibrationData {
             do {
-                try KeychainManagerWrapper.standard.setLibreNativeCalibrationData(calibrationData)
+                try KeychainManager.standard.setLibreNativeCalibrationData(calibrationData)
             } catch {
                 NotificationHelper.sendCalibrationNotification(.invalidCalibrationData)
                 return
@@ -62,13 +87,17 @@ struct Libre2DirectSetup: View {
 
         let max = info.sensorData?.maxMinutesWearTime ?? 0
 
-        let sensor = Sensor(uuid: info.uuid, patchInfo: info.patchInfo, maxAge: max)
+        let sensor = Sensor(uuid: info.uuid, patchInfo: info.patchInfo, maxAge: max, initialIdentificationStrategy: info.initialIdentificationStrategy, sensorName: info.sensorName)
         UserDefaults.standard.preSelectedSensor = sensor
 
         SelectionState.shared.selectedUID = pairingInfo.uuid
-
-        print("dabear:: paried and set selected UID to: \(SelectionState.shared.selectedUID?.hex)")
+        
+        // only relevant for launch through settings, as selectionstate can be persisted
+        // we need to enforce libre2 by removing any selected third party transmitter
+        SelectionState.shared.selectedStringIdentifier = nil
+        print(" paried and set selected UID to: \(SelectionState.shared.selectedUID?.hex)")
         saveNotifier.notify()
+        NotificationHelper.sendLibre2FirectFinishedSetupNotifcation()
 
     }
 
@@ -79,30 +108,7 @@ struct Libre2DirectSetup: View {
 
         }// .accentColor(.red)
     }
-
-    var pairButtonSection : some View {
-        Section {
-            Button("Pair Sensor & connect") {
-                pairSensor()
-            }.buttonStyle(BlueButtonStyle())
-        }
-    }
-
-    var pairingText =
-    """
-    Please make sure that your Libre 2 sensor is already activated and finished warming up.
-    If you have other apps connecting to the sensor via bluetooth, these need to be shut down or uninstalled.
-
-    You can only have one app communicating with the sensor via bluetooth.
-    Then press the \"pariring and connection\" button below to start the process.
-    Please note that the bluetooth connection might take up to a couple of minutes before it starts working.
-    """
-
-    var pairingDescriptionSection: some View {
-        Section(header: Text("About the Process")) {
-            Text(pairingText).padding()
-        }
-    }
+    
     var pairingInfoSection: some View {
         Section(header: Text("Pairinginfo")) {
             if showPairingInfo {
@@ -135,21 +141,37 @@ struct Libre2DirectSetup: View {
 
         }
     }
+    
+    var body : some View {
+        GuidePage(content: {
+            
+            VStack {
+                getLeadingImage()
+                HStack {
+                    InstructionList(instructions: [
+                        LocalizedString("Ваш сенсор должен быть активирован и полностью прогрет", comment: "Label text for step 1 of libre2 setup"),
+                        LocalizedString("Отключите и разорвите пару с другими приложениями или устройствами от сенсора по bluetooth", comment: "Label text for step 2 of libre2 setup"),
+                        LocalizedString("Держите телефон разблокированным и приложение Loop должно работать в фоновом режиме", comment: "Label text for step 3 of libre2 setup"),
+                        LocalizedString("Bluetooth cсоединение может занимать до 4 минут, пока все начнет работать", comment: "Label text for step 3 of libre2 setup")
+                    ])
+                }
+            }
 
-    var body: some View {
-        List {
-            pairingDescriptionSection
-            pairButtonSection
-
-            // pairingInfoSection
-
+        }) {
+            VStack(spacing: 10) {
+                Button("Pair Sensor & connect") {
+                    pairSensor()
+                }
+                .actionButtonStyle(.primary)
+            }.padding()
         }
-        .listStyle(InsetGroupedListStyle())
+        .navigationTitle("Libre 2 Setup")
         .navigationBarBackButtonHidden(true)
         .navigationBarItems(leading: cancelButton)  // the pair button does the save process for us! //, trailing: saveButton)
         .onReceive(service.publisher, perform: receivePairingInfo)
         .alert(item: $presentableStatus) { status in
             Alert(title: Text(status.title), message: Text(status.message), dismissButton: .default(Text("Got it!")))
+        
         }
     }
 }

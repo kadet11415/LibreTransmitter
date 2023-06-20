@@ -2,8 +2,8 @@
 //  Userdefaults+Alarmsettings.swift
 //  MiaomiaoClient
 //
-//  Created by Bjørn Inge Berg on 20/04/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 20/04/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
@@ -11,9 +11,9 @@ import HealthKit
 
 extension UserDefaults {
     private enum Key: String {
-        case mmSyncToNS = "no.bjorninge.mmSyncToNs"
-        case mmBackfillFromHistory = "no.bjorninge.mmBackfillFromHistory"
-        case mmBackfillFromTrend = "no.bjorninge.mmBackfillFromTrend"
+        case mmSyncToNS = "com.loopkit.libreSyncToNs"
+        case mmBackfillFromHistory = "com.loopkit.libreBackfillFromHistory"
+       
     }
 
     var mmSyncToNs: Bool {
@@ -34,12 +34,4 @@ extension UserDefaults {
         }
     }
 
-    var mmBackfillFromTrend: Bool {
-        get {
-            optionalBool(forKey: Key.mmBackfillFromTrend.rawValue) ?? false
-        }
-        set {
-            set(newValue, forKey: Key.mmBackfillFromTrend.rawValue)
-        }
-    }
 }

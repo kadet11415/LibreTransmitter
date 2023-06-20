@@ -2,13 +2,13 @@
 //  GlucoseSmoothing.swift
 //  MiaomiaoClientUI
 //
-//  Created by Bjørn Inge Berg on 25/03/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 25/03/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
 
-//https://github.com/NightscoutFoundation/xDrip/pull/828/files
+// https://github.com/NightscoutFoundation/xDrip/pull/828/files
 
 // private func trendToLibreGlucose(_ measurements: [Measurement]) -> [LibreGlucose]?{
 

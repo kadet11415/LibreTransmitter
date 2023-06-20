@@ -2,8 +2,8 @@
 //  GenericThrottler.swift
 //  LibreTransmitter
 //
-//  Created by Bjørn Inge Berg on 16/08/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 16/08/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
@@ -68,10 +68,10 @@ class GenericThrottler<T, U: Hashable> {
     private func setupIncoming() {
         incoming
         .sink { [weak self] el in
-            guard let self = self else {
+            guard let self else {
                 return
             }
-
+            
             let id = el.self[keyPath: self.identificator]
 
             let neverPublished = !self.initiallyPublished.contains(id)

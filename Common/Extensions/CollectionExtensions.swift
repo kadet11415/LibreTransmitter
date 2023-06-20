@@ -2,8 +2,8 @@
 //  CollectionExtensions.swift
 //  MiaomiaoClientUI
 //
-//  Created by Bjørn Inge Berg on 26/03/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 26/03/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import Foundation
@@ -23,7 +23,7 @@ extension Array where Element: Hashable {
         }
     }
 
-    func removingDuplicates<T: Hashable>(byKey key: (Element) -> T)  -> [Element] {
+    func removingDuplicates<T: Hashable>(byKey key: (Element) -> T) -> [Element] {
          var result = [Element]()
          var seen = Set<T>()
          for value in self {
@@ -34,10 +34,7 @@ extension Array where Element: Hashable {
          return result
      }
 
-
     mutating func removeDuplicates() {
         self = self.removingDuplicates()
     }
 }
-
-

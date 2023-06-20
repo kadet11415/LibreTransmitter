@@ -135,10 +135,10 @@ class Libre2DirectTransmitter: LibreTransmitterProxyProtocol {
                 return
             }
 
-            metadata = LibreTransmitterMetadata(hardware: "-", firmware: "-", battery: 100,
+            metadata = LibreTransmitterMetadata(hardware: nil, firmware: nil, battery: 100,
                                                 name: Self.shortTransmitterName,
                                                 macAddress: nil,
-                                                patchInfo: sensor.patchInfo.hexEncodedString().uppercased(),
+                                                patchInfo: sensor.patchInfo,
                                                 uid: [UInt8](sensor.uuid))
 
             // When end user has changed sensor we cannot trust the current(new) calibrationdata
@@ -146,7 +146,7 @@ class Libre2DirectTransmitter: LibreTransmitterProxyProtocol {
             // Since we don't support multiple sets of calibration datas we chooce to remove
             // all buffered calibration data
             if let currentSensorUUID = metadata?.uid {
-                if let lastSensorUUID = lastSensorUUID,
+                if let lastSensorUUID,
                     lastSensorUUID != currentSensorUUID {
                     bufferedTrends.removeAll()
 
@@ -158,7 +158,7 @@ class Libre2DirectTransmitter: LibreTransmitterProxyProtocol {
             // due to requirement of deleting cgmmanager when changing sensors
             if let latestGlucose = sensorUpdate.trend.last,
                let oldestGlucose = sensorUpdate.trend.first {
-                //ensures captured trends are recent enough
+                // ensures captured trends are recent enough
                 // but also older than the trends sent by sensor this time around
                 let latestGlucoseDate = latestGlucose.date - TimeInterval(minutes: 20)
                 let oldestGlucoseDate = oldestGlucose.date
@@ -178,10 +178,10 @@ class Libre2DirectTransmitter: LibreTransmitterProxyProtocol {
 
                 }
 
-                logger.debug("dabear: sensor updated with trends: \((sensorUpdate.trend.count)): \(sensorUpdate.trend)")
+                logger.debug("sensor updated with trends: \((sensorUpdate.trend.count)): \(sensorUpdate.trend)")
 
                 if !filtered.isEmpty {
-                    logger.debug("dabear: Adding previously captured trends \((filtered.count)): \(filtered)")
+                    logger.debug("Adding previously captured trends \((filtered.count)): \(filtered)")
                     sensorUpdate.trend += filtered
                 }
             }

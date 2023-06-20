@@ -2,8 +2,8 @@
 //  NotificationHelper.swift
 //  MiaomiaoClient
 //
-//  Created by Bjørn Inge Berg on 30/05/2019.
-//  Copyright © 2019 Bjørn Inge Berg. All rights reserved.
+//  Created by LoopKit Authors on 30/05/2019.
+//  Copyright © 2019 LoopKit Authors. All rights reserved.
 //
 
 import AudioToolbox
@@ -18,19 +18,25 @@ private var logger = Logger(forType: "NotificationHelper")
 public enum NotificationHelper {
 
     private enum Identifiers: String {
-        case glucocoseNotifications = "no.bjorninge.miaomiao.glucose-notification"
-        case noSensorDetected = "no.bjorninge.miaomiao.nosensordetected-notification"
-        case tryAgainLater = "no.bjorninge.miaomiao.glucoseNotAvailableTryAgainLater-notification"
-        case sensorChange = "no.bjorninge.miaomiao.sensorchange-notification"
-        case invalidSensor = "no.bjorninge.miaomiao.invalidsensor-notification"
-        case lowBattery = "no.bjorninge.miaomiao.lowbattery-notification"
-        case sensorExpire = "no.bjorninge.miaomiao.SensorExpire-notification"
-        case noBridgeSelected = "no.bjorninge.miaomiao.noBridgeSelected-notification"
-        case bluetoothPoweredOff = "no.bjorninge.miaomiao.bluetoothPoweredOff-notification"
-        case invalidChecksum = "no.bjorninge.miaomiao.invalidChecksum-notification"
-        case calibrationOngoing = "no.bjorninge.miaomiao.calibration-notification"
-        case restoredState = "no.bjorninge.miaomiao.state-notification"
+        case glucocoseNotifications = "com.loopkit.libremiaomiao.glucose-notification"
+        case noSensorDetected = "com.loopkit.libremiaomiao.nosensordetected-notification"
+        case tryAgainLater = "com.loopkit.libremiaomiao.glucoseNotAvailableTryAgainLater-notification"
+        case sensorChange = "com.loopkit.libremiaomiao.sensorchange-notification"
+        case invalidSensor = "com.loopkit.libremiaomiao.invalidsensor-notification"
+        case lowBattery = "com.loopkit.libremiaomiao.lowbattery-notification"
+        case sensorExpire = "com.loopkit.libremiaomiao.SensorExpire-notification"
+        case noBridgeSelected = "com.loopkit.libremiaomiao.noBridgeSelected-notification"
+        case bluetoothPoweredOff = "com.loopkit.libremiaomiao.bluetoothPoweredOff-notification"
+        case invalidChecksum = "com.loopkit.libremiaomiao.invalidChecksum-notification"
+        case calibrationOngoing = "com.loopkit.libremiaomiao.calibration-notification"
+        case restoredState = "com.loopkit.libremiaomiao.state-notification"
+        case libre2directFinishedSetup = "com.loopkit.libremiaomiao.libre2direct-notification"
     }
+    
+    public static var shouldRequestCriticalPermissions = false
+    
+    // don't touch this please
+    public static var criticalAlarmsEnabled = false
 
     public static func vibrateIfNeeded(count: Int = 3) {
         if UserDefaults.standard.mmGlucoseAlarmsVibrate {
@@ -52,39 +58,72 @@ public enum NotificationHelper {
         [HKUnit.milligramsPerDeciliter, HKUnit.millimolesPerLiter].contains(unit)
     }
 
-    private static func requestNotificationPermissions() {
-        logger.debug("requestNotificationPermissions called")
+    private static func requestCriticalNotificationPermissions() {
+        logger.debug("\(#function) called")
         let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.badge, .sound, .alert]) { (granted, error) in
+        center.requestAuthorization(options: [.badge, .sound, .alert, .criticalAlert]) { (granted, error) in
             if granted {
-                logger.debug("requestNotificationPermissions was granted")
+                logger.debug("\(#function) was granted")
+                UNUserNotificationCenter.current().getNotificationSettings { settings in
+                    logPermissions(settings)
+                    criticalAlarmsEnabled = settings.criticalAlertSetting == .enabled
+                }
             } else {
-                logger.debug("requestNotificationPermissions failed because of error: \(String(describing: error))")
+                logger.debug("\(#function) failed because of error: \(String(describing: error))")
             }
 
         }
 
+    }
+    
+    private static func logPermissions(_ settings: UNNotificationSettings, caller: String = #function) {
+        
+        logger.debug("\(caller): alarms allowed: \(String(describing:settings.authorizationStatus)). Critical alarms allowed? \(String(describing:settings.criticalAlertSetting))")
+        
+    }
+
+    public static func requestNotificationPermissionsIfNeeded() {
+        // We assume loop will request necessary "non-critical" permissions for us
+        // So we are only interested in the "critical" permissions here
+        
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            criticalAlarmsEnabled = settings.criticalAlertSetting == .enabled
+            logPermissions(settings)
+            
+            if shouldRequestCriticalPermissions || NotificationHelperOverride.shouldOverrideRequestCriticalPermissions {
+                requestCriticalNotificationPermissions()
+            }
+            
+        }
     }
 
     private static func ensureCanSendNotification(_ completion: @escaping () -> Void ) {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
-                logger.debug("dabear:: ensureCanSendNotification failed, authorization denied")
+                logger.debug("\(#function) failed, authorization denied")
                 return
             }
-
-            logger.debug("dabear:: sending notification was allowed")
+            logger.debug("\(#function) sending notification was allowed")
 
             completion()
         }
     }
 
-    private static func addRequest(identifier: Identifiers, content: UNMutableNotificationContent, deleteOld: Bool = false) {
+    private static func addRequest(identifier: Identifiers, content: UNMutableNotificationContent, deleteOld: Bool = false, isCritical: Bool = false) {
         let center = UNUserNotificationCenter.current()
-        // content.sound = UNNotificationSound.
-        if #available(iOSApplicationExtension 15.0, *) {
+        
+        if isCritical && Self.criticalAlarmsEnabled {
+            logger.debug("\(#function) critical alarm created")
+            content.interruptionLevel =   .critical
+            
+            let criticalVolume = UserDefaults.standard.mmCriticalAlarmsVolume < 60 ? 60 : UserDefaults.standard.mmCriticalAlarmsVolume
+            logger.debug("\(#function) setting criticalVolume to \(criticalVolume)%")
+            content.sound = .defaultCriticalSound(withAudioVolume: Float(criticalVolume / 100))
+        } else {
+            logger.debug("\(#function) timesensitive alarm created")
             content.interruptionLevel = .timeSensitive
         }
+        
         let request = UNNotificationRequest(identifier: identifier.rawValue, content: content, trigger: nil)
 
         if deleteOld {
@@ -94,24 +133,15 @@ public enum NotificationHelper {
         }
 
         center.add(request) { error in
-            if let error = error {
-                logger.debug("dabear:: unable to addNotificationRequest: \(error.localizedDescription)")
+            if let error {
+                logger.debug("\(#function) unable to addNotificationRequest: \(error.localizedDescription)")
                 return
             }
 
-            logger.debug("dabear:: sending \(identifier.rawValue) notification")
+            logger.debug("\(#function) sending \(identifier.rawValue) notification")
         }
     }
-
-    public static func requestNotificationPermissionsIfNeeded() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            logger.debug("settings.authorizationStatus: \(String(describing: settings.authorizationStatus.rawValue))")
-            if ![.authorized, .provisional].contains(settings.authorizationStatus) {
-                requestNotificationPermissions()
-            }
-        }
-    }
-
+    
     static func ensureCanSendGlucoseNotification(_ completion: @escaping (_ unit: HKUnit) -> Void ) {
         ensureCanSendNotification {
             if let glucoseUnit = UserDefaults.standard.mmGlucoseUnit, GlucoseUnitIsSupported(unit: glucoseUnit) {
@@ -123,9 +153,19 @@ public enum NotificationHelper {
 
 // MARK: Sensor related notification sendouts
 public extension NotificationHelper {
+    static func sendLibre2FirectFinishedSetupNotifcation() {
+        ensureCanSendNotification {
+            let content = UNMutableNotificationContent()
+            content.title = "Libre 2 Direct Setup Complete"
+            content.body = "Establishing initial connection can take up to 4 minutes. Keep your phone unlocked and Loop in the foreground while connecting"
+
+            addRequest(identifier: .libre2directFinishedSetup, content: content)
+        }
+    }
+    
     static func sendSensorNotDetectedNotificationIfNeeded(noSensor: Bool) {
         guard UserDefaults.standard.mmAlertNoSensorDetected && noSensor else {
-            logger.debug("Not sending noSensorDetected notification")
+            logger.debug("\(#function) Not sending noSensorDetected notification")
             return
         }
 
@@ -144,7 +184,7 @@ public extension NotificationHelper {
 
     static func sendSensorChangeNotificationIfNeeded() {
         guard UserDefaults.standard.mmAlertNewSensorDetected else {
-            logger.debug("not sending sendSensorChange notification ")
+            logger.debug("\(#function) not sending sendSensorChange notification ")
             return
         }
         sendSensorChangeNotification()
@@ -178,7 +218,7 @@ public extension NotificationHelper {
         let isValid = sensorData.isLikelyLibre1FRAM && (sensorData.state == .starting || sensorData.state == .ready)
 
         guard UserDefaults.standard.mmAlertInvalidSensorDetected && !isValid else {
-            logger.debug("not sending invalidSensorDetected notification")
+            logger.debug("\(#function) not sending invalidSensorDetected notification")
             return
         }
 
@@ -205,8 +245,6 @@ public extension NotificationHelper {
         }
     }
 
-
-
     static func sendInvalidSensorNotification(sensorData: SensorData) {
         ensureCanSendNotification {
             let content = UNMutableNotificationContent()
@@ -228,12 +266,12 @@ public extension NotificationHelper {
 
     static func sendSensorExpireAlertIfNeeded(minutesLeft: Double) {
         guard UserDefaults.standard.mmAlertWillSoonExpire else {
-            logger.debug("mmAlertWillSoonExpire toggle was not enabled, not sending expiresoon alarm")
+            logger.debug("\(#function) mmAlertWillSoonExpire toggle was not enabled, not sending expiresoon alarm")
             return
         }
 
         guard TimeInterval(minutes: minutesLeft) < TimeInterval(hours: 24) else {
-            logger.debug("Sensor time left was more than 24 hours, not sending notification: \(minutesLeft.twoDecimals) minutes")
+            logger.debug("\(#function) Sensor time left was more than 24 hours, not sending notification: \(minutesLeft.twoDecimals) minutes")
             return
         }
 
@@ -246,7 +284,7 @@ public extension NotificationHelper {
                 sendSensorExpireAlert(minutesLeft: minutesLeft)
                 lastSensorExpireAlert = now
             } else {
-                logger.debug("Sensor is soon expiring, but lastSensorExpireAlert was sent less than 6 hours ago, so aborting")
+                logger.debug("\(#function) Sensor is soon expiring, but lastSensorExpireAlert was sent less than 6 hours ago, so aborting")
             }
         } else {
             sendSensorExpireAlert(minutesLeft: minutesLeft)
@@ -269,29 +307,28 @@ public extension NotificationHelper {
             content.title = "Sensor Ending Soon"
             content.body = "Current Sensor is Ending soon! Sensor Life left in \(dynamicText)"
 
-            addRequest(identifier: .sensorExpire, content: content, deleteOld: true)
+            addRequest(identifier: .sensorExpire, content: content, deleteOld: true, isCritical: true)
         }
     }
 }
-
 
 // MARK: - Notification sendout
 public extension NotificationHelper {
     static func sendRestoredStateNotification(msg: String) {
         ensureCanSendNotification {
-            logger.debug("dabear:: sending RestoredStateNotification")
+            logger.debug("\(#function) sending RestoredStateNotification")
 
             let content = UNMutableNotificationContent()
             content.title = "State was restored"
             content.body = msg
 
-            addRequest(identifier: .restoredState, content: content )
+            addRequest(identifier: .restoredState, content: content, deleteOld: true )
         }
     }
 
     static func sendBluetoothPowerOffNotification() {
         ensureCanSendNotification {
-            logger.debug("dabear:: sending BluetoothPowerOffNotification")
+            logger.debug("\(#function) sending BluetoothPowerOffNotification")
 
             let content = UNMutableNotificationContent()
             content.title = "Bluetooth Power Off"
@@ -303,7 +340,7 @@ public extension NotificationHelper {
 
     static func sendNoTransmitterSelectedNotification() {
         ensureCanSendNotification {
-            logger.debug("dabear:: sending NoTransmitterSelectedNotification")
+            logger.debug("\(#function) sending NoTransmitterSelectedNotification")
 
             let content = UNMutableNotificationContent()
             content.title = "No Libre Transmitter Selected"
@@ -349,7 +386,7 @@ public extension NotificationHelper {
         let shouldShowPhoneBattery = UserDefaults.standard.mmShowPhoneBattery
         let transmitterBattery = UserDefaults.standard.mmShowTransmitterBattery && battery != nil ? battery : nil
 
-        logger.debug("dabear:: glucose alarmtype is \(String(describing: alarm))")
+        logger.debug("\(#function) glucose alarmtype is \(String(describing: alarm))")
         // We always send glucose notifications when alarm is active,
         // even if glucose notifications are disabled in the UI
 
@@ -359,7 +396,7 @@ public extension NotificationHelper {
                                      trend: trend, showPhoneBattery: shouldShowPhoneBattery,
                                      transmitterBattery: transmitterBattery)
         } else {
-            logger.debug("dabear:: not sending glucose, shouldSend and alarmIsActive was false")
+            logger.debug("\(#function) not sending glucose, shouldSend and alarmIsActive was false")
             return
         }
     }
@@ -376,13 +413,17 @@ public extension NotificationHelper {
             var titles = [String]()
             var body = [String]()
             var body2 = [String]()
+            
+            var isCritical = false
             switch alarm {
             case .none:
                 titles.append("Glucose")
             case .low:
                 titles.append("LOWALERT!")
+                isCritical = true
             case .high:
                 titles.append("HIGHALERT!")
+                isCritical = true
             }
 
             if isSnoozed {
@@ -395,7 +436,7 @@ public extension NotificationHelper {
 
             body.append("Glucose: \(glucoseDesc)")
 
-            if let oldValue = oldValue {
+            if let oldValue {
                 body.append( LibreGlucose.glucoseDiffDesc(oldValue: oldValue, newValue: glucose))
             }
 
@@ -412,7 +453,7 @@ public extension NotificationHelper {
                 body2.append("Phone: \(battery)%")
             }
 
-            if let transmitterBattery = transmitterBattery {
+            if let transmitterBattery {
                 body2.append("Transmitter: \(transmitterBattery)")
             }
 
@@ -426,22 +467,20 @@ public extension NotificationHelper {
             content.body = body.joined(separator: ", ") + body2s
             addRequest(identifier: .glucocoseNotifications,
                        content: content,
-                       deleteOld: true)
+                       deleteOld: true, isCritical: isCritical && !isSnoozed)
         }
     }
-
-
 
     private static var lastBatteryWarning: Date?
 
     static func sendLowBatteryNotificationIfNeeded(device: LibreTransmitterMetadata) {
         guard UserDefaults.standard.mmAlertLowBatteryWarning else {
-            logger.debug("mmAlertLowBatteryWarning toggle was not enabled, not sending low notification")
+            logger.debug("\(#function) mmAlertLowBatteryWarning toggle was not enabled, not sending low notification")
             return
         }
 
         if let battery = device.battery, battery > 20 {
-            logger.debug("device battery is \(battery), not sending low notification")
+            logger.debug("\(#function) device battery is \(battery), not sending low notification")
             return
 
         }
@@ -455,7 +494,7 @@ public extension NotificationHelper {
                                            deviceName: device.name)
                 lastBatteryWarning = now
             } else {
-                logger.debug("Device battery is running low, but lastBatteryWarning Notification was sent less than 45 minutes ago, aborting. earlierplus: \(earlierplus), now: \(now)")
+                logger.debug("\(#function) Device battery is running low, but lastBatteryWarning Notification was sent less than 45 minutes ago, aborting. earlierplus: \(earlierplus), now: \(now)")
             }
         } else {
             sendLowBatteryNotification(batteryPercentage: device.batteryString,
@@ -474,6 +513,5 @@ public extension NotificationHelper {
             addRequest(identifier: .lowBattery, content: content)
         }
     }
-
 
 }

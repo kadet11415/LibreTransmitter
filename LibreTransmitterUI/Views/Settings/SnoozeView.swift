@@ -2,8 +2,8 @@
 //  TestView.swift
 //  MiaomiaoClientUI
 //
-//  Created by Bjørn Inge Berg on 15/10/2020.
-//  Copyright © 2020 Bjørn Inge Vikhammermo Berg. All rights reserved.
+//  Created by LoopKit Authors on 15/10/2020.
+//  Copyright © 2020 LoopKit Authors. All rights reserved.
 //
 
 import LibreTransmitter
@@ -92,8 +92,8 @@ struct SnoozeView: View {
                 UserDefaults.standard.snoozedUntil = untilDate < Date() ? nil : untilDate
                 print("will snooze for \(snoozeFor) until \(untilDate.description(with: .current))")
                 snoozeDescription = getSnoozeDescription()
-            }, label:  {
-                Text("Click to Snooze Alerts")
+            }, label: {
+                Text(LocalizedString("Click to Snooze Alerts", comment: "Text describing click to snooze label in snoozeview"))
                     .padding()
             })
         }

@@ -2,8 +2,8 @@
 //  NumericTextField.swift
 //  LibreTransmitterUI
 //
-//  Created by Bjørn Inge Berg on 23/05/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 23/05/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import SwiftUI
@@ -143,7 +143,7 @@ public struct NumericTextField: View {
         self.requiresIntegerValue = false
         self.isReadOnly = isReadOnly
         self.showDescription = showDescription
-        if let formErrorState = formErrorState {
+        if let formErrorState {
             self.formstate = formErrorState
         }
     }
@@ -154,7 +154,7 @@ public struct NumericTextField: View {
         self.isReadOnly = isReadOnly
         self.showDescription = showDescription
 
-        if let formErrorState = formErrorState {
+        if let formErrorState {
             self.formstate = formErrorState
         }
 

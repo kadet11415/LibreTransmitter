@@ -2,27 +2,19 @@
 //  AlarmSettingsView.swift
 //  LibreTransmitterUI
 //
-//  Created by Bjørn Inge Berg on 11/05/2021.
-//  Copyright © 2021 Mark Wilson. All rights reserved.
+//  Created by LoopKit Authors on 11/05/2021.
+//  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
 import SwiftUI
 import HealthKit
 
-private class AlarmSettingsIcons {
-
-    public static var Shared = AlarmSettingsIcons()
-
-    public func getImage(resourceName: String) -> some View {
-        let bundle = Bundle(for: type(of: self))
-        if let uiimage = UIImage(named: resourceName, in: bundle, compatibleWith: nil) {
-            return AnyView(Image(uiImage: uiimage))
-        }
-        return AnyView(EmptyView())
-    }
-    lazy var icons8_schedule_50 : some View = getImage(resourceName: "icons8-schedule-50")
-    lazy var icons8_drop_down_arrow_50 : some View = getImage(resourceName: "icons8-drop-down-arrow-50")
-    lazy var icons8_slide_up_50: some View = getImage(resourceName: "icons8-slide-up-50")
+private func systemImage(_ name:String) -> some View {
+    Image(systemName: name)
+         .resizable()
+         .interpolation(.high)
+         .scaledToFit()
+         .frame(width: 40)
 }
 
 class AlarmScheduleState: ObservableObject, Identifiable, Hashable {
@@ -167,7 +159,7 @@ class AlarmSettingsState: ObservableObject {
 }
 
 struct AlarmDateRow: View {
-    var schedule: AlarmScheduleState
+    @ObservedObject var schedule: AlarmScheduleState
     @State var tag: Int
     @Binding var subviewSelection: Int?
 
@@ -178,7 +170,7 @@ struct AlarmDateRow: View {
                            tag: tag,
                            selection: $subviewSelection) {
                 Group {
-                    AlarmSettingsIcons.Shared.icons8_schedule_50
+                    systemImage("clock.arrow.2.circlepath")
                         .frame(maxWidth: 50, alignment: .leading)
                     TextField("Active from - to ", text: Binding<String>(get: { "\(schedule.alarmDateComponents.componentsAsText)" },
                                                       set: { schedule.alarmDateComponents.componentsAsText = $0 }))
@@ -191,43 +183,47 @@ struct AlarmDateRow: View {
                 }.onTapGesture {
                     print("cheduleActivationRow tapped")
                     subviewSelection = tag
-                    self.hideKeyboard()
+                    self.hideKeyboardPreIos16()
 
                 }
 
             }
 
-            Toggle("", isOn: Binding<Bool>(get: { (schedule.enabled) ?? false },
-                                             set: { schedule.enabled = $0 }))
-                .frame(maxWidth: 50, alignment: .trailing)
+            Toggle("", isOn: Binding<Bool>(
+                get: {
+                    schedule.enabled == true
+                },
+                set: {
+                    if $0 != schedule.enabled {
+                        schedule.enabled = $0
+                    }
+                }
+            ))
+            .frame(maxWidth: 50, alignment: .trailing)
 
         }
     }
 }
 
 struct AlarmLowRow: View {
-    var schedule: AlarmScheduleState
+    @ObservedObject var schedule: AlarmScheduleState
     var glucoseUnit: HKUnit
     var glucoseUnitDesc: String
 
     var errorReporter: FormErrorState
-
+    
+    @FocusState private var isInputFocused: Bool
     var body: some View {
         HStack(alignment: .center) {
 
-            AlarmSettingsIcons.Shared.icons8_drop_down_arrow_50
+            systemImage("arrowtriangle.down.circle")
                 .frame(maxWidth: 50, alignment: .leading)
-            Text("Low")
+            Text(LocalizedString("Low", comment: "Text describing Low glucose label in alarmsettingsview"))
                 .frame(maxWidth: 100, alignment: .leading)
+                .onTapGesture {
+                    isInputFocused.toggle()
+                }
             Spacer()
-
-            /*TextField("glucose", text:  Binding<String>(get: { schedule.getLowAlarm(forUnit: glucoseUnit) },
-                                                        set: { schedule.setLowAlarm(forUnit: glucoseUnit, lowAlarm: $0) }))
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .disableAutocorrection(true)
-                .keyboardType(.decimalPad)
-                .border(Color(UIColor.separator))
-                .frame(maxWidth: 100, alignment: .trailing)*/
 
             NumericTextField(description: "glucose", showDescription: false,
                              numericValue: Binding<Double>(
@@ -238,6 +234,7 @@ struct AlarmLowRow: View {
                                 set: {
                                     schedule.setLowAlarm(forUnit: glucoseUnit, lowAlarm: $0)
                                 }), formErrorState: errorReporter)
+            .focused($isInputFocused)
 
             Text("\(glucoseUnitDesc)")
                 .font(.footnote)
@@ -245,25 +242,28 @@ struct AlarmLowRow: View {
 
         }
         .onTapGesture {
-            self.hideKeyboard()
+            self.hideKeyboardPreIos16()
         }
     }
 }
 
 struct AlarmHighRow: View {
-    var schedule: AlarmScheduleState
+    @ObservedObject var schedule: AlarmScheduleState
     var glucoseUnit: HKUnit
     var glucoseUnitDesc: String
 
     var errorReporter: FormErrorState
-
+    @FocusState private var isInputFocused: Bool
     var body: some View {
         HStack(alignment: .center) {
 
-            AlarmSettingsIcons.Shared.icons8_slide_up_50
+            systemImage( "arrowtriangle.up.circle")
                 .frame(maxWidth: 50, alignment: .leading)
-            Text("High")
+            Text(LocalizedString("High", comment: "Text describing High glucose label in alarmsettingsview"))
                 .frame(maxWidth: 100, alignment: .leading)
+                .onTapGesture {
+                    isInputFocused.toggle()
+                }
             Spacer()
 
             NumericTextField(description: "glucose", showDescription: false,
@@ -273,14 +273,14 @@ struct AlarmHighRow: View {
                                     schedule.setHighAlarm(forUnit: glucoseUnit, highAlarm: $0)
 
                                 }), formErrorState: errorReporter)
-
+            .focused($isInputFocused)
             Text("\(glucoseUnitDesc)")
                 .font(.footnote)
                 .frame(maxWidth: 100, alignment: .trailing)
 
         }
         .onTapGesture {
-            self.hideKeyboard()
+            self.hideKeyboardPreIos16()
         }
     }
 }
@@ -295,19 +295,39 @@ struct AlarmSettingsView: View {
     }
 
     @State private var presentableStatus: StatusMessage?
-
     @StateObject var alarmState = AlarmSettingsState.loadState()
-
     @State private var subviewSelection: Int?
+    
+    @State private var authSuccess = false
+    
+    // Set this to true to require system authentication
+    // for accessing the alarm section
+    @State private var requiresAuthentication = Features.alarmSettingsViewRequiresAuthentication
 
     var body: some View {
-
-        list
-        .ignoresSafeArea()
+        erasedWithKeyboardDismissal(list)
         .alert(item: $presentableStatus) { status in
             Alert(title: Text(status.title), message: Text(status.message), dismissButton: .default(Text("Got it!")))
         }
-
+        .navigationBarTitle("Alarm Settings")
+        .onAppear {
+            if requiresAuthentication && !authSuccess {
+                self.authenticate { success in
+                    print("got authentication response: \(success)")
+                    authSuccess = success
+                }
+            }
+            
+        }
+        .disabled(requiresAuthentication ? !authSuccess : false)
+    }
+    
+    func erasedWithKeyboardDismissal(_ view: any View) -> AnyView {
+        if #available(iOS 16.0, *) {
+            return AnyView(view.scrollDismissesKeyboard(.immediately))
+        }
+        
+        return AnyView(view)
     }
 
     @StateObject var errorReporter = FormErrorState()
@@ -316,13 +336,13 @@ struct AlarmSettingsView: View {
 
         List {
             ForEach(Array(alarmState.schedules.enumerated()), id: \.1) { i, schedule in
-                Section(header: Text("Schedule \(i+1)")) {
+                Section(header: Text(LocalizedString("Schedule ", comment: "Text describing schedule in alarmsettingsview") +  "\(i+1)")) {
                     AlarmDateRow(schedule: schedule, tag: i, subviewSelection: $subviewSelection)
                     AlarmLowRow(schedule: schedule, glucoseUnit: glucoseUnit, glucoseUnitDesc: glucoseUnitDesc, errorReporter: errorReporter)
                     AlarmHighRow(schedule: schedule, glucoseUnit: glucoseUnit, glucoseUnitDesc: glucoseUnitDesc, errorReporter: errorReporter)
 
                 }.onTapGesture {
-                    self.hideKeyboard()
+                    self.hideKeyboardPreIos16()
                 }
 
             }
